@@ -13,11 +13,10 @@
 
 ###########################################################################
 ## Parameters to set by command line in future
-CODEDIR=/seq/lincRNA/Jesse/bin/scripts/
-
 PROJECT=/seq/lincRNA/Jesse/CRISPR_Screen/191030_BMDC_Cas9_CRISPRi/
 GENELIST=$PROJECT/01_ChooseRegions/GeneList.txt
 
+CODEDIR=$PROJECT/CRISPRiTilingDesign/
 
 ###########################################################################
 ## Parameters for genome to factor out in future
@@ -54,10 +53,11 @@ cat $PROJECT/01_ChooseRegions/GenePromoters.bed $PROJECT/01_ChooseRegions/Chosen
 
 #######################################################################################
 ## SIDE STEP:  PICK CODING GUIDES
-python $PROJECT/03_FinishArray/GetCodingGuides.py \
+use .python-3.5.1; source /seq/lincRNA/Ben/VENV_MIP/bin/activate
+python $CODEDIR/src/GetCodingGuides.py \
         --genes ../01_ChooseRegions/GeneList.txt \
         --outfile ../01_ChooseRegions/GeneList.CodingGuides.txt \
-        --guideLibrary $PROJECT/03_FinishArray/broadgpp-brie-library-contents.txt
+        --guideLibrary $CODEDIR/data/broadgpp-brie-library-contents.txt.gz
 
 
 #######################################################################################
@@ -66,13 +66,14 @@ python $PROJECT/03_FinishArray/GetCodingGuides.py \
 DIR=$PROJECT/02_RunCRISPRDesigner/
 mkdir -p $DIR $DIR/log/ $DIR/design/
 
-CMD="reuse Java-1.7; java -Xmx12g -jar $CODEDIR/CRISPRDesigner.jar TARGETS=$TARGETS OUTPUT_DIR=$DIR/design/ GENOME_FASTA=$GENOME_FASTA LENIENT=false OFF_TARGETS=$OFF_TARGET_BITS SKIP_PAIRING=true DIVIDE_AND_CONQUER=true MAX_DIVIDE=600 GRID_ENGINE=true QUEUE=gsa"
-$CODEDIR/quick-qsub -o $DIR/log/o.runCD.qq -s $DIR/log/s.runCD.qq $CMD
+CMD="reuse Java-1.7; java -Xmx12g -jar $CODEDIR/src/CRISPRDesigner.jar TARGETS=$TARGETS OUTPUT_DIR=$DIR/design/ GENOME_FASTA=$GENOME_FASTA LENIENT=false OFF_TARGETS=$OFF_TARGET_BITS SKIP_PAIRING=true DIVIDE_AND_CONQUER=true MAX_DIVIDE=600 GRID_ENGINE=true QUEUE=gsa"
+quick-qsub -o $DIR/log/o.runCD.qq -s $DIR/log/s.runCD.qq $CMD
 
 ## Charlie's script
 ## Parameters to consider modifying:  MinStartDistance (i.e., minimum spacing between gRNA start sites)
 ## Add that parameter at top to main script
-/seq/lincRNA/cfulco/bin/scripts/GuideSelection/GetTileGuides.py \
+reuse Python-2.7  # this is needed for Charlie's scripts
+$CODEDIR/charlie/GetTileGuides.py \
   --infile $DIR/design/filteredGuides.bed \
   --outprefix $DIR/design/filteredGuides.bed \
   --chrom All --start 0 --end 0 -T 4 --OTMin 50 --MinStartDistance 5
@@ -84,32 +85,34 @@ sed 1d $DIR/design/filteredGuides.bed.preDesign.bed > $DIR/design/filteredGuides
 #######################################################################################
 ## 03_Subpools
 
-## NOTE:  Code is in 03_FinishArray. TO DO:  Check into github
 mkdir $PROJECT/03_Subpools/
 
-python $PROJECT/03_FinishArray/MakeGuidePool.py \
+python $CODEDIR/src/MakeGuidePool.py \
+    --PoolID CRISPRiFullGuide \
     --input $PROJECT/02_RunCRISPRDesigner/design/filteredGuides.bed.preDesign.bed \
     --outdir $PROJECT/03_Subpools/ \
     --nCtrls 50 \
+    --negCtrlList $CODEDIR/data/Weissman1000.negative_control.20bp.design.txt \
     --nGuidesPerElement 15 \
     --vector sgMS2 \
-    --PoolID CRISPRiFullGuide
+    --vectorDesigns $CODEDIR/data/CloningDesigns.txt \
 
-python $PROJECT/03_FinishArray/MakeGuidePool.py \
+python $CODEDIR/src/MakeGuidePool.py \
+    --PoolID CodingFullGuide \
     --input $PROJECT/01_ChooseRegions/GeneList.CodingGuides.txt \
     --outdir $PROJECT/03_Subpools/ \
     --nGuidesPerElement 4 \
     --vector sgMS2 \
-    --PoolID CodingFullGuide
+    --vectorDesigns $CODEDIR/data/CloningDesigns.txt 
 
 
 ## Make dead guides for sgMS2-KRAB test
-python $PROJECT/03_FinishArray/GetDeadGuides.py \
-    --design $PROJECT/03_Subpools/CRISPRiFullGuide.design.txt \
-    --outfile $PROJECT/03_Subpools/CRISPRiDeadGuide.design.txt \
-    --PoolID CRISPRiDeadGuide
+    python $CODEDIR/src/GetDeadGuides.py \
+        --design $PROJECT/03_Subpools/CRISPRiFullGuide.design.txt \
+        --outfile $PROJECT/03_Subpools/CRISPRiDeadGuide.design.txt \
+        --PoolID CRISPRiDeadGuide
 
-python $PROJECT/03_FinishArray/GetDeadGuides.py \
+python $CODEDIR/src/GetDeadGuides.py \
     --design $PROJECT/03_Subpools/CodingFullGuide.design.txt \
     --outfile $PROJECT/03_Subpools/CodingDeadGuide.design.txt \
     --PoolID CodingDeadGuide

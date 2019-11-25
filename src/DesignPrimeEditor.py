@@ -61,7 +61,7 @@ def designPegRNAsForVariant(edit, guides, args):
 
     ## Assert that base in genomic sequence = ref, as a sanity check
     ## TODO: Need to rewrite the guide designer so it can create guides for editing alt to ref
-    fasta = pybedtools.example_filename("/seq/lincRNA/data/hg19/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa")
+    fasta = pybedtools.example_filename(args.fasta)
     toreplace = BedTool.seq((edit['chr'], edit['start'], edit['end']), fasta)
     if not toreplace.upper() == edit['ref'].upper():
         raise ValueError("Reference sequence does not match proposed ref sequence: " + toreplace + " vs " + edit['ref'])

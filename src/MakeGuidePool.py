@@ -43,9 +43,12 @@ def parseargs(required_args=True):
     parser.add_argument('--nGuidesPerElement', required=required_args, type=int,    help="Number of guides to choose per element (in the guideSet column)")
     parser.add_argument('--negCtrlList', default="data/Weissman1000.negative_control.20bp.design.txt", help="Formatted guide file of negative controls.")
     parser.add_argument('--nCtrls', default=0, type=int, help="Number of negative control gRNAs to include")
-    parser.add_argument('--vectorDesigns', default="/seq/lincRNA/Jesse/CRISPR_Screen/191030_BMDC_Cas9_CRISPRi/03_FinishArray/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs")
+    parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs")
     parser.add_argument('--vector', default='sgOpti', help="Name of vector to index into vectorDesigns")
     parser.add_argument('--PoolID', default="MyPool", help="Unique name of pool or subpool for naming oligos - e.g. 191110_GATA1")
+    parser.add_argument('--seqCol', default='GuideSequenceWithPAM', help="Name of column with guide sequence")
+    parser.add_argument('--noPAM', action="store_true", default=False, help="Whether to trim PAM from guide sequence in seqCol")
+    parser.add_argument('--PAM', default="NGG", help="Only NGG PAM is currently supported")
 
     args = parser.parse_args()
     return(args)
@@ -76,7 +79,17 @@ def fillInDesign(df, SEQCOL="seq", sgOligos=False, TRIMPAM=True):
     if sgOligos:
         df["Top"]=df["GuideSequenceMinusG"].apply(lambda x: makeOligos(x, "top"))
         df["Bot"]=df["GuideSequenceMinusG"].apply(lambda x: makeOligos(x, "bot"))
-    
+
+    cols=['chr','start','end','locus','strand','guideSet']
+    for col in cols:
+        if not col in df.columns:
+            df[col] = ''
+
+    num=['score','SSC']
+    for col in num:
+        if not col in df.columns:
+            df[col] = 0
+
     return df
 
 
@@ -170,7 +183,7 @@ def getNegativeControlGuides(negCtrlList, nCtrls):
 
 def main(args):
     guides = read_table(args.input)
-    guides = fillInDesign(guides, SEQCOL="GuideSequenceWithPAM", TRIMPAM=True)
+    guides = fillInDesign(guides, SEQCOL=args.seqCol, TRIMPAM=(not args.noPAM))
     selected = selectNguidesPerElement(guides, int(args.nGuidesPerElement), columnName="guideSet", minGuides=0)
 
     if (args.nCtrls > 0):

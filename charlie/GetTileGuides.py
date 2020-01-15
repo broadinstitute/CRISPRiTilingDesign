@@ -160,6 +160,9 @@ def GetTileGuides(INFILE, OUTPREFIX, LOCUS, SSCMIN, OTMIN, POLYT, POLYV, ENDTCou
 
     ## TODO JME: Factor out these guide filters so they can be easily applied to the negative control guides
     a=a[a["score"]>=OTMIN]
+    if len(a) == 0:
+        raise RuntimeException("No guides passed score filter")
+
     outfile.write("OTScore >= "+str(OTMIN)+" "+ str(len(a["GuideSequenceMinusG"].drop_duplicates()))+"\n")
 
     a=a[a["GuideSequenceMinusG"].apply(lambda x: "T"*POLYT not in "G"+x)]

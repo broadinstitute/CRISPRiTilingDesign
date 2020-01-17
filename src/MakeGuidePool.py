@@ -49,6 +49,8 @@ def parseargs(required_args=True):
     parser.add_argument('--seqCol', default='GuideSequenceWithPAM', help="Name of column with guide sequence")
     parser.add_argument('--noPAM', action="store_true", default=False, help="Whether to trim PAM from guide sequence in seqCol")
     parser.add_argument('--PAM', default="NGG", help="Only NGG PAM is currently supported")
+    parser.add_argument('--selectMethod', default='score', choices=['score','even'], help="Method to select guides within elements")
+    parser.add_argument('--forceGuides', help="Pass a file containing one guide name per line to force selection of these gRNAs (useful for including gRNAs that we know work)")
 
     args = parser.parse_args()
     return(args)
@@ -133,28 +135,40 @@ def addGibsonArms(df, vectorDesignFile, vector, MapLength=21):
     
     
 # select guides per element
-def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0):
+def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, method="score", includeGuides=None):
+
     ''' Annotates with OffTargetScore (int(score) and Quality Score. Selects N guides per element'''
     df["OffTargetScore"]=df["score"].apply(lambda x: int(x)) 
     df["QualityScore"]=df.SSC*100+df.OffTargetScore # for now just get em close and add em
     
     # For each element, select the top N elements based on Quality score
     chosen=pd.DataFrame()
-    MINGUIDESPERELEMENT=len(df)
+    minGuidesInAnElement=len(df)
     
     for i in set(df[columnName]):
         tSet=df[df[columnName]==i]
         
         if len(tSet)>=minGuides:
             
-            if len(tSet)<MINGUIDESPERELEMENT:
-                MINGUIDESPERELEMENT=len(tSet)
+            if len(tSet)<minGuidesInAnElement:
+                minGuidesInAnElement=len(tSet)
+
+            if includeGuides is not None:
+                currInclude = pd.merge(tSet, includeGuides)
+            else:
+                currInclude = tSet.head(0)
             
-            chosen=pd.concat([chosen, tSet.sort_values("QualityScore", ascending=False).head(NGuides)])
-        
-    print(MINGUIDESPERELEMENT, "Minimum guides per element")
-    
+            nToAdd = max(0,NGuides-len(currInclude))
+            if method == 'score':
+                chosen=pd.concat([chosen, currInclude, tSet.sort_values("QualityScore", ascending=False).head(nToAdd)])
+            elif method == 'even':
+                chosen=pd.concat([chosen, currInclude, tSet.iloc[getEvenlySpacedIndices(tSet,nToAdd),]])
+            else:
+                raise ValueError("Guide selection method " + method + " is not supported.")
+
+    print(minGuidesInAnElement, "Minimum guides per element")
     return chosen
+
 
 
 def makeDesignFile(pool, PoolID):
@@ -181,10 +195,21 @@ def getNegativeControlGuides(negCtrlList, nCtrls):
     return negCtrls
 
 
+def loadForceGuides(file):
+    if file is not None:
+        includeGuides = read_table(args.forceGuides, header=None) 
+        includeGuides.columns = ['locus']
+    else:
+        includeGuides = None    
+    return includeGuides
+
+
+
 def main(args):
     guides = read_table(args.input)
     guides = fillInDesign(guides, SEQCOL=args.seqCol, TRIMPAM=(not args.noPAM))
-    selected = selectNguidesPerElement(guides, int(args.nGuidesPerElement), columnName="guideSet", minGuides=0)
+    includeGuides = loadForceGuides(args.forceGuides)
+    selected = selectNguidesPerElement(guides, int(args.nGuidesPerElement), columnName="guideSet", minGuides=0, method=args.selectMethod, includeGuides=includeGuides)
 
     if (args.nCtrls > 0):
         negCtrls = getNegativeControlGuides(args.negCtrlList, args.nCtrls)

@@ -43,6 +43,7 @@ FwdPrimer               Primer 1 for amplifying the subpool (order this sequence
 RevPrimer               Primer 2 for amplifying the subpool (order this sequence)
 guideSet                Gene / enhancer / target of this gRNA
 
+Current behavior is, if design file has identical oligo sequences, to collapse these before re-duplicating to fill the space.
 ''')
     parser = argparse.ArgumentParser(description='''
 Combine different oligo subpools output by MakeGuidePool.py into a final pool for ordering.  
@@ -55,6 +56,7 @@ Terminology: "subpool" refers to a set of oligos with the same PCR handles on th
     parser.add_argument('--config', required=required_args, help="Config file with columns: poolgroup pool DesignFile Multiply FwdPrimer RevPrimer")
     parser.add_argument('--outbase', required=required_args)
     parser.add_argument('--fillToOligoPoolSize', default=-1, type=int, help="Total size of oligo pool; if total number of guides is less than this number, will output oligo order file with this total number of gRNAs.  If total guides is more than this number, will truncate.")
+    parser.add_argument('--includeReverseComplements', default=False, action='store_true', help="Include this flag to adding reverse complement oligos. Probably a bad idea if this array includes tiling sequences (or HyPR barcodes)")
 
     args = parser.parse_args()
     return(args)
@@ -63,6 +65,11 @@ Terminology: "subpool" refers to a set of oligos with the same PCR handles on th
 
 def addHandles(df, fwdPrimer, revPrimer):
     ''' Adds PCR handles for PCR1 '''
+    if np.isnan(fwdPrimer):
+        fwdPrimer = ''
+    if np.isnan(revPrimer):
+        revPrimer = ''
+
     df["FwdPrimer"] = fwdPrimer
     df["RevPrimer"] = revPrimer
     df["RevPrimerOligo"]=df["RevPrimer"].apply(lambda x: str(Seq(x).reverse_complement()))
@@ -109,7 +116,7 @@ def writeSubpoolSummary(merged, outfile):
     summ.to_csv(outfile, sep='\t', header=True, index=False)
 
 
-def writeSequencesToOrder(oligos, outfile, poolMax):
+def writeSequencesToOrder(oligos, outfile, poolMax, includeReverseComplements):
 
     if poolMax > 0 and len(oligos) > poolMax:
         print("Truncating oligo list from " + str(len(oligos)) + " to " + str(poolMax))
@@ -122,7 +129,7 @@ def writeSequencesToOrder(oligos, outfile, poolMax):
         oligosRevComp = pd.Series([str(Seq(oligo).reverse_complement()) for key,oligo in oligos.iteritems()])
         while len(towrite) < poolMax:
             nToAdd = min(len(oligos), poolMax-len(towrite))
-            if strand == "-":
+            if strand == "-" and includeReverseComplements:
                 towrite = towrite.append(oligosRevComp[0:nToAdd])
                 strand = "+"
             elif strand == "+":
@@ -142,15 +149,16 @@ def main(args):
     merged = pd.DataFrame()
     for index, row in config.iterrows():
         currPool = loadSubpool(row)
-        merged = merged.append(currPool)
+        currOligos = currPool['OligoSequence'].drop_duplicates()
 
+        merged = merged.append(currPool)
         ## Print oligos multiple times if desired, to balance the subpools
         if 'Multiply' in row:
             multiples = row['Multiply']
         else:
             multiples = 1
         for i in range(multiples):
-            oligos = oligos.append(currPool['OligoSequence'])
+            oligos = oligos.append(currOligos)
 
     merged.to_csv(args.outbase + ".full.txt", sep='\t', header=True, index=False)
     
@@ -158,7 +166,7 @@ def main(args):
     writeDesignFile(merged, args.outbase + ".design.txt")
     writePcrPrimers(merged, args.outbase + ".primers.txt") 
     writeSubpoolSummary(merged, args.outbase + '.subpools.txt')
-    writeSequencesToOrder(oligos, args.outbase + ".SequencesToOrder.txt", args.fillToOligoPoolSize)
+    writeSequencesToOrder(oligos, args.outbase + ".SequencesToOrder.txt", args.fillToOligoPoolSize, args.includeReverseComplements)
 
     print("Total unique oligos: ", len(oligos.drop_duplicates()))
     print("Total oligos for order: ", len(oligos))

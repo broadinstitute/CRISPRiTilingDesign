@@ -20,12 +20,12 @@ import sys
 from scipy import stats
 import csv
 import os.path
+from Bio.Seq import Seq
 
 import warnings
 warnings.filterwarnings("ignore")
 
 from JuicerCRISPRiDesign import *
-
 
 
 def parseargs(required_args=True):
@@ -40,7 +40,7 @@ def parseargs(required_args=True):
     
     parser.add_argument('--input', required=required_args, help="preDesign.bed file from GetTileGuides.py")
     parser.add_argument('--outdir', required=required_args)
-    parser.add_argument('--nGuidesPerElement', required=required_args, type=int,    help="Number of guides to choose per element (in the guideSet column)")
+    parser.add_argument('--nGuidesPerElement', required=required_args, type=int,    help="Number of guides to choose per element (in the guideSet column). Set to 0 to select all.")
     parser.add_argument('--negCtrlList', default="data/Weissman1000.negative_control.20bp.design.txt", help="Formatted guide file of negative controls.")
     parser.add_argument('--nCtrls', default=0, type=int, help="Number of negative control gRNAs to include")
     parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs")
@@ -51,24 +51,12 @@ def parseargs(required_args=True):
     parser.add_argument('--PAM', default="NGG", help="Only NGG PAM is currently supported")
     parser.add_argument('--selectMethod', default='score', choices=['score','even'], help="Method to select guides within elements")
     parser.add_argument('--forceGuides', help="Pass a file containing one guide name per line to force selection of these gRNAs (useful for including gRNAs that we know work)")
-
+    parser.add_argument('--trimElements', default=0, type=int, help="Remove guides corresponding to elements that have fewer than this many guides (e.g., because not enough guides existed to choose from, repeats, etc.).")
+    parser.add_argument('--excludeRestrictionSites', default="", help="Comma-delimited list of subsequences (e.g. restriction enzyme sites) to exclude gRNAs.")
+    
     args = parser.parse_args()
     return(args)
 
-
-
-def makeOligos(STRING, side, vector="sgopti"):
-    '''makes the single guide cloning oligos for a single guide.
-    specify side (top or bottom) and vector (sgOpti or pZB)'''
-    if vector.lower()=="sgopti":
-        STRING=prependGifNecessary(STRING)
-        if side.lower()=="top":
-            return "CACC"+STRING
-        elif side.lower()=="bot":
-            SEQ=Seq(STRING)
-            RC=SEQ.reverse_complement()
-            return "AAAC"+str(RC)
-        
 
 def fillInDesign(df, SEQCOL="seq", sgOligos=False, TRIMPAM=True): 
     if TRIMPAM:
@@ -135,36 +123,52 @@ def addGibsonArms(df, vectorDesignFile, vector, MapLength=21):
     
     
 # select guides per element
-def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, method="score", includeGuides=None):
+def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, method="score", includeGuides=None, trimElements=0):
 
     ''' Annotates with OffTargetScore (int(score) and Quality Score. Selects N guides per element'''
     df["OffTargetScore"]=df["score"].apply(lambda x: int(x)) 
     df["QualityScore"]=df.SSC*100+df.OffTargetScore # for now just get em close and add em
     
     # For each element, select the top N elements based on Quality score
-    chosen=pd.DataFrame()
+    chosen=df.head(0)
     minGuidesInAnElement=len(df)
-    
+
     for i in set(df[columnName]):
         tSet=df[df[columnName]==i]
         
+
         if len(tSet)>=minGuides:
             
             if len(tSet)<minGuidesInAnElement:
                 minGuidesInAnElement=len(tSet)
 
+            toAdd = tSet.head(0)
+
             if includeGuides is not None:
-                currInclude = pd.merge(tSet, includeGuides)
-            else:
-                currInclude = tSet.head(0)
-            
-            nToAdd = max(0,NGuides-len(currInclude))
+                toAdd = pd.merge(tSet, includeGuides)
+
+            if (len(tSet)<trimElements) and (len(toAdd) == 0):
+                ## Skip elements with too few guides and where we weren't try to force include the guides
+                print("Skipping " + i + " because there are too few guides")
+                continue
+
+            # If guide has been already chosen for a different (overlapping) element, pre-select these guides
+            #import pdb; pdb.set_trace()
+            toAdd = pd.concat([toAdd, tSet[tSet['locus'].isin(chosen['locus'])]])
+
+            nToAdd = max(0,NGuides-len(toAdd))
+            tSet = tSet[~tSet['locus'].isin(toAdd['locus'])]
+
             if method == 'score':
-                chosen=pd.concat([chosen, currInclude, tSet.sort_values("QualityScore", ascending=False).head(nToAdd)])
+                toAdd = pd.concat([toAdd, tSet.sort_values("QualityScore", ascending=False).head(nToAdd)])
+
             elif method == 'even':
-                chosen=pd.concat([chosen, currInclude, tSet.iloc[getEvenlySpacedIndices(tSet,nToAdd),]])
+                toAdd = pd.concat([toAdd, tSet.iloc[getEvenlySpacedIndices(tSet,nToAdd),]])
             else:
                 raise ValueError("Guide selection method " + method + " is not supported.")
+            
+            chosen=pd.concat([chosen, toAdd])
+            
 
     print(minGuidesInAnElement, "Minimum guides per element")
     return chosen
@@ -173,21 +177,26 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
 
 def makeDesignFile(pool, PoolID):
     DESIGNCOLS=["chr", "start", "end","name", "score", "strand", "GuideSequence", "GuideSequenceMinusG",
-                "MappingSequence", "OffTargetScore", "target", "subpool", "OligoID"]
+                "MappingSequence", "OffTargetScore", "guideSet", "pool", "OligoID"]
     # Add in an oligo ID based on name of oligo pool
     design = pool.copy()
     design["pool"]=PoolID
     design["OligoID"]=[PoolID+"_"+str(x+1) for x in range(len(design))]
     design["name"]=design["OligoID"]
-    design["start"]=design["start"].apply(lambda x: smartInt(x))
-    design["end"]=design["end"].apply(lambda x: smartInt(x))    
+    design = design.astype({'start': pd.Int64Dtype(), 'end': pd.Int64Dtype()})  ## Int64Dtype required to allow NA values for negative_control guides
+
+    ## Reorder columns
+    cols = DESIGNCOLS + design.columns[~design.columns.isin(DESIGNCOLS)].tolist()
+    design = design[cols]
     return design
 
 
-def getNegativeControlGuides(negCtrlList, nCtrls):
+def getNegativeControlGuides(negCtrlList, nCtrls, reSites, vectorDesigns, vector):
     negCtrls = read_table(negCtrlList)
     negCtrls["OffTargetScore"]=200
     negCtrls["QualityScore"]=200
+    negCtrls = addGibsonArms(negCtrls, vectorDesigns, vector)
+    negCtrls = excludeRestrictionSites(negCtrls, reSites)
 
     if (nCtrls > len(negCtrls)):
         raise ValueError("Asking for more negative controls than are provided in the negCtrlList")
@@ -204,21 +213,36 @@ def loadForceGuides(file):
     return includeGuides
 
 
+def excludeRestrictionSites(guides, excludeCommaList):
+    if excludeCommaList != '':
+        for curr in excludeCommaList.split(','):
+            guides = guides[~guides['CoreOligo'].str.contains(curr)]
+            rc = str(Seq(curr).reverse_complement())
+            guides = guides[~guides['CoreOligo'].str.contains(rc)]
+    return guides
+
 
 def main(args):
     guides = read_table(args.input)
     guides = fillInDesign(guides, SEQCOL=args.seqCol, TRIMPAM=(not args.noPAM))
+    guides = addGibsonArms(guides, args.vectorDesigns, args.vector)
+    guides = excludeRestrictionSites(guides, args.excludeRestrictionSites)
+
     includeGuides = loadForceGuides(args.forceGuides)
-    selected = selectNguidesPerElement(guides, int(args.nGuidesPerElement), columnName="guideSet", minGuides=0, method=args.selectMethod, includeGuides=includeGuides)
+
+    if args.nGuidesPerElement > 0:
+        selected = selectNguidesPerElement(guides, args.nGuidesPerElement, columnName="guideSet", minGuides=0, method=args.selectMethod, includeGuides=includeGuides, trimElements=args.trimElements)
+    else:
+        print("Keeping all guides because --nGuidesPerElement is 0.")
+        selected = guides
 
     if (args.nCtrls > 0):
-        negCtrls = getNegativeControlGuides(args.negCtrlList, args.nCtrls)
+        negCtrls = getNegativeControlGuides(args.negCtrlList, args.nCtrls, args.excludeRestrictionSites, args.vectorDesigns, args.vector)
         combined = pd.concat([selected, negCtrls])
     else:
         combined = selected
 
-    design = addGibsonArms(combined, args.vectorDesigns, args.vector)
-    design = makeDesignFile(design, args.PoolID)
+    design = makeDesignFile(combined, args.PoolID)
     design.to_csv(os.path.join(args.outdir, args.PoolID + ".design.txt"), sep='\t', header=True, index=False)
     try:
         writeBed(design, os.path.join(args.outdir, args.PoolID + ".design.bed"))

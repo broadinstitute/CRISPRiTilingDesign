@@ -53,7 +53,8 @@ def parseargs(required_args=True):
     parser.add_argument('--forceGuides', help="Pass a file containing one guide name per line to force selection of these gRNAs (useful for including gRNAs that we know work)")
     parser.add_argument('--trimElements', default=0, type=int, help="Remove guides corresponding to elements that have fewer than this many guides (e.g., because not enough guides existed to choose from, repeats, etc.).")
     parser.add_argument('--excludeRestrictionSites', default="", help="Comma-delimited list of subsequences (e.g. restriction enzyme sites) to exclude gRNAs.")
-    
+    parser.add_argument('--barcodes', help="File with one unique barcode sequence per line, e.g. for HyPR screens. Will substitute these sequences in place of '[NNNNN]' sequence from vector design file.  Errors out if there are more unique guides than barcodes.")
+
     args = parser.parse_args()
     return(args)
 
@@ -177,17 +178,59 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
 
 def makeDesignFile(pool, PoolID):
     DESIGNCOLS=["chr", "start", "end","name", "score", "strand", "GuideSequence", "GuideSequenceMinusG",
-                "MappingSequence", "OffTargetScore", "guideSet", "pool", "OligoID"]
+                "MappingSequence", "OligoID"]
     # Add in an oligo ID based on name of oligo pool
     design = pool.copy()
     design["pool"]=PoolID
-    design["OligoID"]=[PoolID+"_"+str(x+1) for x in range(len(design))]
+
+    uniqOligos=design['GuideSequenceMinusG'].unique()
+    ids = pd.DataFrame({
+        "OligoID": [PoolID+"_"+str(x+1) for x in range(len(uniqOligos))],
+        "GuideSequenceMinusG": uniqOligos
+        })
+    design = pd.merge(design, ids, on='GuideSequenceMinusG') 
+#    design["OligoID"]=[PoolID+"_"+str(x+1) for x in range(len(design))]
     design["name"]=design["OligoID"]
     design = design.astype({'start': pd.Int64Dtype(), 'end': pd.Int64Dtype()})  ## Int64Dtype required to allow NA values for negative_control guides
 
     ## Reorder columns
     cols = DESIGNCOLS + design.columns[~design.columns.isin(DESIGNCOLS)].tolist()
     design = design[cols]
+    return design
+
+
+def addBarcodeToOligo(oligo, barcode, toReplace):
+    if (oligo.find(toReplace) == -1):
+        raise ValueError("Failed adding barcode sequence to oligo: Expected to find '" + toReplace +"' in the oligo sequence: " + oligo)
+    oligo = oligo.replace(toReplace, str(barcode))
+    return oligo
+
+
+def addBarcodes(design, barcodeFile, toReplace="[NNNNN]"):
+    '''
+    Add HyPR barcodes to the final CoreOligo sequence.
+    '''
+    barcodes = read_table(barcodeFile, header=None)
+    barcodes.columns = ['BarcodeSequence']
+
+    if len(barcodes) != len(barcodes.BarcodeSequence.unique()):
+        raise ValueError("Not allowed: duplicate barcodes in " + barcodeFile)
+
+    uniqOligos = design['CoreOligo'].unique()
+
+    if len(uniqOligos) > len(barcodes):
+        raise ValueError("Number of barcodes provided in " + barcodeFile + " (" + str(len(barcodes)) + ") is less than number of unique oligos (" + str(len(uniqOligos)) + ").")
+
+    barcodes = barcodes.head(len(uniqOligos))
+    barcodes['CoreOligo'] = uniqOligos
+
+    cols = design.columns.to_list() + ['BarcodeSequence']
+    design = pd.merge(design, barcodes, on='CoreOligo')
+    design = design[cols]
+
+    for idx,row in design.iterrows():
+        design.loc[idx,'CoreOligo'] = addBarcodeToOligo(row['CoreOligo'], row['BarcodeSequence'], toReplace)
+
     return design
 
 
@@ -243,6 +286,10 @@ def main(args):
         combined = selected
 
     design = makeDesignFile(combined, args.PoolID)
+
+    if args.barcodes is not None:
+        design = addBarcodes(design, args.barcodes)
+
     design.to_csv(os.path.join(args.outdir, args.PoolID + ".design.txt"), sep='\t', header=True, index=False)
     try:
         writeBed(design, os.path.join(args.outdir, args.PoolID + ".design.bed"))

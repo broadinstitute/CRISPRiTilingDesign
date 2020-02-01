@@ -73,3 +73,14 @@ def smartInt(x):
         return int(x)
     except ValueError:
         return x
+
+
+def getEvenlySpacedIndices(arr, numElems):
+    if numElems >= len(arr):
+        return [i for i in range(len(arr))]
+    else:
+        return np.round(np.linspace(0, len(arr) - 1, numElems)).astype(int)
+
+def getEvenlySpaced(arr, numElems):
+    return arr[getEvenlySpacedIndices(arr, numElems)]
+

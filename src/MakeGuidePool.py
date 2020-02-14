@@ -43,6 +43,8 @@ def parseargs(required_args=True):
     parser.add_argument('--nGuidesPerElement', required=required_args, type=int,    help="Number of guides to choose per element (in the guideSet column)")
     parser.add_argument('--negCtrlList', default="data/Weissman1000.negative_control.20bp.design.txt", help="Formatted guide file of negative controls.")
     parser.add_argument('--nCtrls', default=0, type=int, help="Number of negative control gRNAs to include")
+    parser.add_argument('--safeCtrlList', default="data/Tycko2019SafeTargeting.txt", help="Formatted guide file for safe-targeting controls.")
+    parser.add_argument('--nSafeCtrls', default=0, type=int, help="Number of safe-targeting gRNAs to include")
     parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs")
     parser.add_argument('--vector', default='sgOpti', help="Name of vector to index into vectorDesigns")
     parser.add_argument('--PoolID', default="MyPool", help="Unique name of pool or subpool for naming oligos - e.g. 191110_GATA1")
@@ -216,6 +218,10 @@ def main(args):
         combined = pd.concat([selected, negCtrls])
     else:
         combined = selected
+
+    if (args.nSafeCtrls > 0):
+        safeCtrls = getNegativeControlGuides(args.safeCtrlList, args.nSafeCtrls)
+        combined = pd.concat([combined, safeCtrls])
 
     design = addGibsonArms(combined, args.vectorDesigns, args.vector)
     design = makeDesignFile(design, args.PoolID)

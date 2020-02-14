@@ -288,7 +288,7 @@ def main(args):
         combined = selected
 
     if (args.nSafeCtrls > 0):
-        safeCtrls = getNegativeControlGuides(args.safeCtrlList, args.nSafeCtrls)
+        safeCtrls = getNegativeControlGuides(args.safeCtrlList, args.nSafeCtrls, args.excludeRestrictionSites, args.vectorDesigns, args.vector)
         combined = pd.concat([combined, safeCtrls])
 
     design = makeDesignFile(combined, args.PoolID)

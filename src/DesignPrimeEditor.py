@@ -34,7 +34,7 @@ def parseargs(required_args=True):
     parser.add_argument('--alt', type=str, help="Desired edited sequence")
     parser.add_argument('--edits', help="Input file with columns: chr start end name ref alt")
     parser.add_argument('--outfile', required=required_args, help="Output file")
-    parser.add_argument('--guides', required=required_args, help="Guide file (e.g., .preDesign.bed file output by GetTileGuides.py) [cols: chr     start   end   strand  GuideSequenceWithPAM    guideSet]. Extra columns okay and will be output at end")
+    parser.add_argument('--guides', required=required_args, help="Guide file (e.g., .preDesign.bed file output by GetTileGuides.py) [cols: chr     start   end   strand  GuideSequenceWithPAM    guideSet]. Extra columns okay; will be ignored and output unchanged in final table")
     parser.add_argument('--fasta', required=required_args, default="/seq/lincRNA/data/hg19/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa", help="Indexed FASTA file")
 
     parser.add_argument('--minPbsLength', default=8, type=int, help="Minimum length of the primer binding sequence")
@@ -61,7 +61,7 @@ def designPegRNAsForVariant(edit, guides, args):
 
     ## Assert that base in genomic sequence = ref, as a sanity check
     ## TODO: Need to rewrite the guide designer so it can create guides for editing alt to ref
-    fasta = pybedtools.example_filename("/seq/lincRNA/data/hg19/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa")
+    fasta = pybedtools.example_filename(args.fasta)
     toreplace = BedTool.seq((edit['chr'], edit['start'], edit['end']), fasta)
     if not toreplace.upper() == edit['ref'].upper():
         raise ValueError("Reference sequence does not match proposed ref sequence: " + toreplace + " vs " + edit['ref'])
@@ -96,6 +96,11 @@ def designPegRNAsForVariant(edit, guides, args):
 
 def main(args):
     guides = read_table(args.guides)
+
+    required_cols = ['chr','start','end','strand','GuideSequenceWithPAM','guideSet']
+    for col in required_cols:
+        if not len(guides[col])>0:
+            raise ValueError("Guide file must contain column: " + col)
 
     if args.edits is None:
         edits = pd.DataFrame({ 

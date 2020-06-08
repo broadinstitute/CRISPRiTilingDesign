@@ -167,37 +167,32 @@ def GetTileGuides(INFILE, OUTPREFIX, LOCUS, SSCMIN, OTMIN, POLYT, POLYV, ENDTCou
     outfile.write("OTScore >= "+str(OTMIN)+" "+ str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
 
     df=df[df["GuideSequenceMinusG"].apply(lambda x: "T"*POLYT not in "G"+x)]
-    print str(1) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+
     df=df[df["GuideSequenceMinusG"].apply(lambda x: "A"*POLYV not in "G"+x)]
-    print str(2) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+
     df=df[df["GuideSequenceMinusG"].apply(lambda x: "G"*POLYV not in "G"+x)]
-    print str(3) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+
     df=df[df["GuideSequenceMinusG"].apply(lambda x: "C"*POLYV not in "G"+x)]
-    print str(4) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+
     outfile.write("polyBaseFilters "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
 
     df=df[df["GuideSequenceMinusG"].apply(lambda x: x[-ENDTCount:]!="T"*ENDTCount)]
     outfile.write("No guides ending with "+str(ENDTCount)+" Ts: "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
-    print str(5) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
     df=df[df["GuideSequenceMinusG"].apply(lambda x: x.count("G"))<MAXG]
     outfile.write("10 G Filter "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
-    print str(6) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
     df=df[df["GuideSequenceMinusG"].apply(lambda x: GCContent("G"+x))>MINGC]
     df=df[df["GuideSequenceMinusG"].apply(lambda x: GCContent("G"+x))<MAXGC]
     outfile.write("GCFilter "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
-    print str(7) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
     df["SSC"]=df["GuideSequence"].apply(lambda x: scoreByCorrectMatrix(x, LISTofMATRIX))
-    print str(8) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
     # filter for very low SSC
     preF=len(df["GuideSequenceMinusG"].drop_duplicates())
     df=df[df["SSC"]>SSCMIN]
     postF=len(df["GuideSequenceMinusG"].drop_duplicates())
     outfile.write("SSC filter "+str(postF)+". fraction: "+str(1-postF/preF)+"\n")
-    print str(9) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
     # - - - - - - - - - - - - - - - - - - - - - - - - #
     # Shrink array by removing very close guides, keeping the guide with higher SSC

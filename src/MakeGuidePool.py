@@ -134,9 +134,9 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
     chosen=df.head(0)
     minGuidesInAnElement=len(df)
 
-    for i in set(df[columnName]):
+    for i in sorted(set(df[columnName]), reverse=True):
         tSet=df[df[columnName]==i]
-        
+        tSet=tSet.sort_values(by='start')
 
         if len(tSet)>=minGuides:
             
@@ -169,10 +169,14 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
                 raise ValueError("Guide selection method " + method + " is not supported.")
             
             chosen=pd.concat([chosen, toAdd])
-            
+    
+    ## Now that we've made selections per guide, go back and pull in info from all guide-target pairs where
+    ##  that guide has been selected for at least one target
+    final = pd.merge(df, chosen[['GuideSequenceWithPAM']].drop_duplicates())
 
     print(minGuidesInAnElement, "Minimum guides per element")
-    return chosen
+    print("Selected " + str(len(chosen[['GuideSequenceWithPAM']].drop_duplicates())) + " unique guides in selectNguidesPerElement.")
+    return final
 
 
 
@@ -257,11 +261,14 @@ def loadForceGuides(file):
 
 
 def excludeRestrictionSites(guides, excludeCommaList):
+    #import pdb; pdb.set_trace()
     if excludeCommaList != '':
         for curr in excludeCommaList.split(','):
-            guides = guides[~guides['CoreOligo'].str.contains(curr)]
+            ## Only look at guide sequence +/- 10bp on either side ... because the GA might have the RE sequence by design
+            middle = pd.Series([row["LeftGA"][-10:] + row["GuideSequenceMinusG"] + row["RightGA"][10:] for key,row in guides.iterrows()])
+            guides = guides[~middle.str.contains(curr, case=False)]
             rc = str(Seq(curr).reverse_complement())
-            guides = guides[~guides['CoreOligo'].str.contains(rc)]
+            guides = guides[~middle.str.contains(rc, case=False)]
     return guides
 
 
@@ -292,7 +299,7 @@ def main(args):
 
     design.to_csv(os.path.join(args.outdir, args.PoolID + ".design.txt"), sep='\t', header=True, index=False)
     try:
-        writeBed(design, os.path.join(args.outdir, args.PoolID + ".design.bed"))
+        writeBed(design[['chr','start','end','name']].drop_duplicates(), os.path.join(args.outdir, args.PoolID + ".design.bed"))
     except:
         print("Failed to write BED file.", sys.exc_info()[0])
 

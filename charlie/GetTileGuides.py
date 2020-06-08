@@ -20,9 +20,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def limitToLocus(df, (CHR, START, END)):
-    a=df[df["chr"]==CHR]
-    a=a[a["start"]>=int(START)]
-    a=a[a["end"]<=int(END)]
+    df=df[df["chr"]==CHR]
+    df=df[df["start"]>=int(START)]
+    df=df[df["end"]<=int(END)]
     return a
 
 def GCContent(x):
@@ -40,16 +40,16 @@ def trimG(seq):
         return seq
 
 def writeBed(df, OUTFILE, score=None,negative=False):
-    a=df.copy()
-    a["start"]=np.vectorize(str)(np.vectorize(int)(a["start"]))
-    a["end"]=np.vectorize(str)(np.vectorize(int)(a["end"]))
+    df=df.copy()
+    df["start"]=np.vectorize(str)(np.vectorize(int)(df["start"]))
+    df["end"]=np.vectorize(str)(np.vectorize(int)(df["end"]))
     
     cols=["chr", "start", "end"]
     if score:
         cols=["chr", "start", "end", score]
     if negative:
-        a[score]=-a[score]
-    a[cols].to_csv(OUTFILE, sep='\t', header=False, index=False)
+        df[score]=-df[score]
+    df[cols].to_csv(OUTFILE, sep='\t', header=False, index=False)
 
 def drawDensity(vec, label=None, fill=False):
     x=np.arange(min(vec), max(vec), (max(vec)-min(vec))/1000)
@@ -147,57 +147,68 @@ def GetTileGuides(INFILE, OUTPREFIX, LOCUS, SSCMIN, OTMIN, POLYT, POLYV, ENDTCou
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
     # will edit dataframe a
-    a=guides.copy()
+    df=guides.copy()
 
-    if LOCUS[0] != "All":
-        a=limitToLocus(a, LOCUS)
+    if LOCUS[0] != "All" and LOCUS[0] is not None:
+        df=limitToLocus(df, LOCUS)
     
-    outfile.write("within region of interest: "+str(len(a.drop_duplicates("GuideSequenceWithPAM")))+"\n")
+    outfile.write("within region of interest: "+str(len(df.drop_duplicates("GuideSequenceWithPAM")))+"\n")
     
     # fill in other guide sequences       
-    a["GuideSequence"]=a["GuideSequenceWithPAM"].apply(lambda x: trimPAM(x))
-    a["GuideSequenceMinusG"]=a["GuideSequence"].apply(lambda x: trimG(x))
+    df["GuideSequence"]=df["GuideSequenceWithPAM"].apply(lambda x: trimPAM(x))
+    df["GuideSequenceMinusG"]=df["GuideSequence"].apply(lambda x: trimG(x))
 
+    #import pdb; pdb.set_trace()
     ## TODO JME: Factor out these guide filters so they can be easily applied to the negative control guides
-    a=a[a["score"]>=OTMIN]
-    if len(a) == 0:
+    df=df[df["score"]>=OTMIN]
+    if len(df) == 0:
         raise RuntimeException("No guides passed score filter")
 
-    outfile.write("OTScore >= "+str(OTMIN)+" "+ str(len(a["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    outfile.write("OTScore >= "+str(OTMIN)+" "+ str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
 
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: "T"*POLYT not in "G"+x)]
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: "A"*POLYV not in "G"+x)]
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: "G"*POLYV not in "G"+x)]
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: "C"*POLYV not in "G"+x)]
-    outfile.write("polyBaseFilters "+str(len(a["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: "T"*POLYT not in "G"+x)]
+    print str(1) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: "A"*POLYV not in "G"+x)]
+    print str(2) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: "G"*POLYV not in "G"+x)]
+    print str(3) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: "C"*POLYV not in "G"+x)]
+    print str(4) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+    outfile.write("polyBaseFilters "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
 
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: x[-ENDTCount:]!="T"*ENDTCount)]
-    outfile.write("No guides ending with "+str(ENDTCount)+" Ts: "+str(len(a["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: x[-ENDTCount:]!="T"*ENDTCount)]
+    outfile.write("No guides ending with "+str(ENDTCount)+" Ts: "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    print str(5) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: x.count("G"))<MAXG]
-    outfile.write("10 G Filter "+str(len(a["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: x.count("G"))<MAXG]
+    outfile.write("10 G Filter "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    print str(6) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: GCContent("G"+x))>MINGC]
-    a=a[a["GuideSequenceMinusG"].apply(lambda x: GCContent("G"+x))<MAXGC]
-    outfile.write("GCFilter "+str(len(a["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: GCContent("G"+x))>MINGC]
+    df=df[df["GuideSequenceMinusG"].apply(lambda x: GCContent("G"+x))<MAXGC]
+    outfile.write("GCFilter "+str(len(df["GuideSequenceMinusG"].drop_duplicates()))+"\n")
+    print str(7) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
-    a["SSC"]=a["GuideSequence"].apply(lambda x: scoreByCorrectMatrix(x, LISTofMATRIX))
+    df["SSC"]=df["GuideSequence"].apply(lambda x: scoreByCorrectMatrix(x, LISTofMATRIX))
+    print str(8) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
 
     # filter for very low SSC
-    preF=len(a["GuideSequenceMinusG"].drop_duplicates())
-    a=a[a["SSC"]>SSCMIN]
-    postF=len(a["GuideSequenceMinusG"].drop_duplicates())
+    preF=len(df["GuideSequenceMinusG"].drop_duplicates())
+    df=df[df["SSC"]>SSCMIN]
+    postF=len(df["GuideSequenceMinusG"].drop_duplicates())
     outfile.write("SSC filter "+str(postF)+". fraction: "+str(1-postF/preF)+"\n")
-    
+    print str(9) + " " + str(len(df[df['guideSet'] == "K562-Roadmap-30"]))
+
     # - - - - - - - - - - - - - - - - - - - - - - - - #
     # Shrink array by removing very close guides, keeping the guide with higher SSC
     # for now ignore which peak it comes from
-    b=a.drop_duplicates("GuideSequenceWithPAM")
-    b=b.sort(["chr", "start"])
+    
+    b=df.sort(["chr", "start"])
     
     # if dont need to shrink (i.e. MINSTARTDIST<1), skip this step
     
     if MINSTARTDIST>0:
+        b=b.drop_duplicates("GuideSequenceWithPAM")
         legal=[]
 
         legal.append(b.irow(0))

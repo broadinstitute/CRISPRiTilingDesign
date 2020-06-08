@@ -13,6 +13,7 @@ from Bio import SeqUtils
 import pandas as pd
 import numpy as np
 from collections import OrderedDict
+from JuicerCRISPRiDesign import *
 
 NICK_POSITION=-3
 
@@ -32,12 +33,13 @@ class PrimeEditor:
         self.primerBindingSite = str(primerBindingSite)
         self.rtTemplate = str(rtTemplate)
         self.scaffold = str(scaffold)
+        self.spacerPlusG = prependGifNecessary(self.spacer)
 
     def __str__(self):
         return "PrimeEditor: "+ str(self.getPegRNASequence())
         
     def getPegRNASequence(self):
-        return self.spacer + self.scaffold + self.getExtensionSequence()
+        return self.spacerPlusG + self.scaffold + self.getExtensionSequence()
     
     def getExtensionSequence(self):
         return self.rtTemplate + self.primerBindingSite
@@ -84,10 +86,12 @@ class PrimeEditor:
             ("primerBindingSite" , self.primerBindingSite),
             ("rtTemplate" , self.rtTemplate),
             ("pegRNASequence" , self.getPegRNASequence()),
-            ("SpacerOligoTop", "CACC" + self.spacer + "GTTTT"),
-            ("SpacerOligoBot", str("CTCTAAAAC" + Seq(self.spacer).reverse_complement())),
+            ("SpacerOligoTop", "CACC" + self.spacerPlusG + "GTTTT"),
+            ("SpacerOligoBot", str("CTCTAAAAC" + Seq(self.spacerPlusG).reverse_complement())),
             ("ExtensionOligoTop", "GTGC" + self.getExtensionSequence()),
-            ("ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement()))
+            ("ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement())),
+            ("GibsonOligoTop", "aaaggacgaaacacc" + self.spacerPlusG + "GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAAC"),
+            ("GibsonOligoBot", "gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT")
             )))
 
     def getPositionRelativeToNick(self):

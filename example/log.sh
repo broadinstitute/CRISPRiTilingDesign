@@ -11,40 +11,43 @@
 ## Set up GeneList.txt
 
 
+
 ###########################################################################
 ## Parameters to set by command line in future
-PROJECT=/seq/lincRNA/Jesse/CRISPR_Screen/191030_BMDC_Cas9_CRISPRi/
-GENELIST=$PROJECT/01_ChooseRegions/GeneList.txt
-
+GCP_PROJECT=landerlab-atacseq-200218
+PROJECT=/seq/lincRNA/thouis/GuideScanTest
+GENELIST=GeneList.txt
 CODEDIR=$PROJECT/CRISPRiTilingDesign/
+
+LOGGING_BUCKET=gs://landerlab-guidescan/logging
+GUIDESCAN_BUCKET=gs://landerlab-guidescan-index
+TMP_BUCKET=gs://landerlab-guidescan/test
 
 ###########################################################################
 ## Parameters for genome to factor out in future
 
-## mm9
-SIZES=/seq/lincRNA/data/mm9/sizes
-OFF_TARGET_BITS=/seq/lincRNA/CRISPR/OffTargets/mm9.CRISPR.sorted.bit
-GENOME_FASTA=/seq/lincRNA/data/mm9/UCSC/mm9/Sequence/WholeGenomeFasta/genome.fa
-TSS500BP=/seq/lincRNA/data/mm9/RefSeqCurated.180427.bed.CollapsedGeneBounds.TSS.500bp.bed
-
-## hg19 
-#SIZES=/seq/lincRNA/data/hg19/sizes
-#OFF_TARGET_BITS=/seq/lincRNA/CRISPR/OffTargets/hg19.CRISPR.bit
-#GENOME_FASTA=/seq/lincRNA/data/hg19/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa
-#TSS500BP=/seq/lincRNA/data/hg19/RefSeqCurated.170308.bed.CollapsedGeneBounds.TSS.500bp.bed
-
+## hg38
+SIZES=/seq/lincRNA/data/hg38/sizes
+TSS500BP=/seq/lincRNA/data/hg38/RefSeqCurated.200730.UniqueTSS.CollapsedGeneBounds.500bp.bed
 
 ## Key scripts
 use BEDTools
 
-
 #######################################################################################
 ## 01_ChooseRegions
 ## Get promoter regions
+mkdir -p $PROJECT/01_ChooseRegions
+
 join -1 4 -2 1 -o 1.1,1.2,1.3,1.4  \
  <(sort -k 4 $TSS500BP | bedtools slop -s -l -150 -r 50 -g $SIZES) \
  <(sort $GENELIST) | tr ' ' '\t' \
- > $PROJECT/01_ChooseRegions/GenePromoters.bed
+ > $PROJECT/01_ChooseRegions/GenePromotersLocations.bed
+
+
+# add unique designator to multi-TSS genes
+source /seq/lincRNA/thouis/VENV36/bin/activate
+python $CODEDIR/src/bed_add_unique_suffix.py TSS $PROJECT/01_ChooseRegions/GenePromotersLocations.bed $PROJECT/01_ChooseRegions/GenePromoters.bed
+
 
 
 TARGETS=$PROJECT/01_ChooseRegions/AllRegions.bed
@@ -53,30 +56,54 @@ cat $PROJECT/01_ChooseRegions/GenePromoters.bed $PROJECT/01_ChooseRegions/Chosen
 
 #######################################################################################
 ## SIDE STEP:  PICK CODING GUIDES
-use .python-3.5.1; source /seq/lincRNA/Ben/VENV_MIP/bin/activate
+source /seq/lincRNA/thouis/VENV36/bin/activate
 python $CODEDIR/src/GetCodingGuides.py \
-        --genes ../01_ChooseRegions/GeneList.txt \
-        --outfile ../01_ChooseRegions/GeneList.CodingGuides.txt \
+        --genes $GENELIST \
+        --outfile $PROJECT/01_ChooseRegions/GeneList.CodingGuides.txt \
         --guideLibrary $CODEDIR/data/broadgpp-brie-library-contents.txt.gz
 
 
 #######################################################################################
-## 02_RunCRISPRDesigner
+## 02_RunGuideScan
 
+reuse -q Google-Cloud-SDK
+gsutil cp $TARGETS $TMP_BUCKET/targets.bed
+
+/seq/lincRNA/thouis/VENV36/bin/dsub --project $GCP_PROJECT \
+     --zones "us-*" \
+     --logging $LOGGING_BUCKET \
+     --input GS_BAM=$GUIDESCAN_BUCKET/cas9_hg38_all_guides.bam \
+     --input GS_BAI=$GUIDESCAN_BUCKET/cas9_hg38_all_guides.bam.bai \
+     --input TARGETS=$TMP_BUCKET/targets.bed \
+     --output GUIDES_CSV=$TMP_BUCKET/guidescan_guides.csv \
+     --image us.gcr.io/$GCP_PROJECT/guidescan \
+     --wait \
+     --command "mkdir guidescan_outdir; \
+                guidescan_guidequery \
+                -b \$GS_BAM \
+                --target within \
+                -o guidescan_outdir \
+                --batch \$TARGETS -n 8 \
+                --annot \$TARGETS \
+                --select score; \
+                cp guidescan_outdir/*.csv \$GUIDES_CSV"
+
+gsutil cp $TMP_BUCKET/guidescan_guides.csv $PROJECT/guidescan_guides.csv
+     
+## Charlie's script - removed by Ray August 4, 2020
+##
+## Charlie's sript removed any guides with 4 or more poly T,
+## Off-Target min 50 score (not sure how that compares betwen
+## CRISPRDesigner and Guidescan), and made sure they were separated by
+## at least 5bp in their start location.
 DIR=$PROJECT/02_RunCRISPRDesigner/
-mkdir -p $DIR $DIR/log/ $DIR/design/
+mkdir -p $DIR $DIR/design/
 
-CMD="reuse Java-1.7; java -Xmx12g -jar $CODEDIR/src/CRISPRDesigner.jar TARGETS=$TARGETS OUTPUT_DIR=$DIR/design/ GENOME_FASTA=$GENOME_FASTA LENIENT=false OFF_TARGETS=$OFF_TARGET_BITS SKIP_PAIRING=true DIVIDE_AND_CONQUER=true MAX_DIVIDE=600 GRID_ENGINE=true QUEUE=gsa"
-quick-qsub -o $DIR/log/o.runCD.qq -s $DIR/log/s.runCD.qq $CMD
+python $CODEDIR/src/FilterGuides.py \
+  --infile $PROJECT/guidescan_guides.csv \
+  --outfile $DIR/design/filteredGuides.bed.preDesign.bed \
+  --polyTmax 4 --minStartDistance 5
 
-## Charlie's script
-## Parameters to consider modifying:  MinStartDistance (i.e., minimum spacing between gRNA start sites)
-## Add that parameter at top to main script
-reuse Python-2.7  # this is needed for Charlie's scripts
-$CODEDIR/charlie/GetTileGuides.py \
-  --infile $DIR/design/filteredGuides.bed \
-  --outprefix $DIR/design/filteredGuides.bed \
-  --chrom All --start 0 --end 0 -T 4 --OTMin 50 --MinStartDistance 5
 
 ## Make version openable in IGV for looking at locations
 sed 1d $DIR/design/filteredGuides.bed.preDesign.bed > $DIR/design/filteredGuides.bed.getGuides.thin.bed

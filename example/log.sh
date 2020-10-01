@@ -1,37 +1,29 @@
-## Jesse Engreitz
-## 10/30/19
-## Design for CRISPRi pool using dead gRNAs with Cas9 mouse
+#!/bin/bash
 
-## Gene list and other overall design info: https://docs.google.com/document/d/1aJNGAz5ExeedPdJVLvgp6V3jktqP1Z1qACwnv5uWPFA/edit
-## Eye-balled some enhancers in the regions (but am certain that ABC would find them significant)
-##   Ly96 does not have good enhancer cnadidates
-##   Tlr4 has some good candidates too but not chosen due to space constraints
-##   > ChosenEnhancers.bed
-
-## Set up GeneList.txt
-
+## Run for all Genes in hg38 list
 
 
 ###########################################################################
 ## Parameters to set by command line in future
-GCP_PROJECT=landerlab-atacseq-200218
-PROJECT=/seq/lincRNA/thouis/GuideScanTest
+PROJECT=/mnt/DATA/GuideScanTest
 GENELIST=GeneList.txt
-CODEDIR=$PROJECT/CRISPRiTilingDesign/
+CODEDIR=/mnt/DATA/CRISPR_design_scripts/CRISPRiTilingDesign/
+GUIDESCAN_INDEX=/mnt/DATA/CRISPR_design_scripts/guidescan_index
+NGUIDESPERELEMENT=15
 
-LOGGING_BUCKET=gs://landerlab-guidescan/logging
-GUIDESCAN_BUCKET=gs://landerlab-guidescan-index
-TMP_BUCKET=gs://landerlab-guidescan/test
 
 ###########################################################################
 ## Parameters for genome to factor out in future
 
 ## hg38
-SIZES=/seq/lincRNA/data/hg38/sizes
-TSS500BP=/seq/lincRNA/data/hg38/RefSeqCurated.200730.UniqueTSS.CollapsedGeneBounds.500bp.bed
+## TODO - remove hardcoded paths
+SIZES=/mnt/DATA/CRISPR_design_scripts/hg38/sizes
+TSS500BP=/mnt/DATA/CRISPR_design_scripts/hg38/RefSeqCurated.200730.UniqueTSS.CollapsedGeneBounds.500bp.bed
 
-## Key scripts
-use BEDTools
+# get Python 3.7 or higher
+eval "$(conda shell.bash hook)"
+conda activate guidescan_env
+
 
 #######################################################################################
 ## 01_ChooseRegions
@@ -45,10 +37,7 @@ join -1 4 -2 1 -o 1.1,1.2,1.3,1.4  \
 
 
 # add unique designator to multi-TSS genes
-source /seq/lincRNA/thouis/VENV36/bin/activate
 python $CODEDIR/src/bed_add_unique_suffix.py TSS $PROJECT/01_ChooseRegions/GenePromotersLocations.bed $PROJECT/01_ChooseRegions/GenePromoters.bed
-
-
 
 TARGETS=$PROJECT/01_ChooseRegions/AllRegions.bed
 cat $PROJECT/01_ChooseRegions/GenePromoters.bed $PROJECT/01_ChooseRegions/ChosenEnhancers.bed > $TARGETS
@@ -56,7 +45,6 @@ cat $PROJECT/01_ChooseRegions/GenePromoters.bed $PROJECT/01_ChooseRegions/Chosen
 
 #######################################################################################
 ## SIDE STEP:  PICK CODING GUIDES
-source /seq/lincRNA/thouis/VENV36/bin/activate
 python $CODEDIR/src/GetCodingGuides.py \
         --genes $GENELIST \
         --outfile $PROJECT/01_ChooseRegions/GeneList.CodingGuides.txt \
@@ -64,32 +52,24 @@ python $CODEDIR/src/GetCodingGuides.py \
 
 
 #######################################################################################
-## 02_RunGuideScan
+## 02_RunGuideScan via docker
 
-reuse -q Google-Cloud-SDK
-gsutil cp $TARGETS $TMP_BUCKET/targets.bed
 
-/seq/lincRNA/thouis/VENV36/bin/dsub --project $GCP_PROJECT \
-     --zones "us-*" \
-     --logging $LOGGING_BUCKET \
-     --input GS_BAM=$GUIDESCAN_BUCKET/cas9_hg38_all_guides.bam \
-     --input GS_BAI=$GUIDESCAN_BUCKET/cas9_hg38_all_guides.bam.bai \
-     --input TARGETS=$TMP_BUCKET/targets.bed \
-     --output GUIDES_CSV=$TMP_BUCKET/guidescan_guides.csv \
-     --image us.gcr.io/$GCP_PROJECT/guidescan \
-     --wait \
-     --command "mkdir guidescan_outdir; \
-                guidescan_guidequery \
-                -b \$GS_BAM \
-                --target within \
-                -o guidescan_outdir \
-                --batch \$TARGETS -n 8 \
-                --annot \$TARGETS \
-                --select score; \
-                cp guidescan_outdir/*.csv \$GUIDES_CSV"
+GS_COMMAND="/usr/local/bin/guidescan_guidequery \
+    -b /mnt/guidescan/cas9_hg38_all_guides.bam \
+    --target within \
+    -o /mnt/project \
+    -n 20 \
+    --batch /mnt/project/01_ChooseRegions/AllRegions.bed \
+    --annot /mnt/project/01_ChooseRegions/AllRegions.bed \
+    --select score"
 
-gsutil cp $TMP_BUCKET/guidescan_guides.csv $PROJECT/guidescan_guides.csv
-     
+docker run \
+       -v ${GUIDESCAN_INDEX}:/mnt/guidescan \
+       -v $PROJECT:/mnt/project \
+       guidescan \
+       $GS_COMMAND
+
 ## Charlie's script - removed by Ray August 4, 2020
 ##
 ## Charlie's sript removed any guides with 4 or more poly T,
@@ -99,8 +79,8 @@ gsutil cp $TMP_BUCKET/guidescan_guides.csv $PROJECT/guidescan_guides.csv
 DIR=$PROJECT/02_RunCRISPRDesigner/
 mkdir -p $DIR $DIR/design/
 
-python $CODEDIR/src/FilterGuides.py \
-  --infile $PROJECT/guidescan_guides.csv \
+python $CODEDIR/src/filter_guides.py \
+  --infile $PROJECT/GuideScan_batch_output.csv \
   --outfile $DIR/design/filteredGuides.bed.preDesign.bed \
   --polyTmax 4 --minStartDistance 5
 
@@ -112,29 +92,34 @@ sed 1d $DIR/design/filteredGuides.bed.preDesign.bed > $DIR/design/filteredGuides
 #######################################################################################
 ## 03_Subpools
 
-mkdir $PROJECT/03_Subpools/
+mkdir -p $PROJECT/03_Subpools/
 
+echo Processing Target Guides...
 python $CODEDIR/src/MakeGuidePool.py \
     --PoolID CRISPRiFullGuide \
     --input $PROJECT/02_RunCRISPRDesigner/design/filteredGuides.bed.preDesign.bed \
     --outdir $PROJECT/03_Subpools/ \
     --nCtrls 50 \
     --negCtrlList $CODEDIR/data/Weissman1000.negative_control.20bp.design.txt \
-    --nGuidesPerElement 15 \
-    --vector sgMS2 \
-    --vectorDesigns $CODEDIR/data/CloningDesigns.txt \
+    --nGuidesPerElement $NGUIDESPERELEMENT \
+    --vector sgOpti \
+    --seqCol gRNA \
+    --noPAM \
+    --vectorDesigns $CODEDIR/data/CloningDesigns.txt
 
+echo ""
+echo Processing Coding Guides...
 python $CODEDIR/src/MakeGuidePool.py \
     --PoolID CodingFullGuide \
     --input $PROJECT/01_ChooseRegions/GeneList.CodingGuides.txt \
     --outdir $PROJECT/03_Subpools/ \
     --nGuidesPerElement 4 \
-    --vector sgMS2 \
+    --vector sgOpti \
     --vectorDesigns $CODEDIR/data/CloningDesigns.txt 
-
+echo ""
 
 ## Make dead guides for sgMS2-KRAB test
-    python $CODEDIR/src/GetDeadGuides.py \
+python $CODEDIR/src/GetDeadGuides.py \
         --design $PROJECT/03_Subpools/CRISPRiFullGuide.design.txt \
         --outfile $PROJECT/03_Subpools/CRISPRiDeadGuide.design.txt \
         --PoolID CRISPRiDeadGuide

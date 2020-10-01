@@ -126,7 +126,7 @@ def addGibsonArms(df, vectorDesignFile, vector, MapLength=21):
     
     
 # select guides per element
-def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, method="score", includeGuides=None, trimElements=0):
+def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, method="score", includeGuides=None, trimElements=0, seqCol='GuideSequenceWithPAM'):
 
     ''' Annotates with OffTargetScore (int(score) and Quality Score. Selects N guides per element'''
     df["OffTargetScore"]=df["score"].apply(lambda x: int(x)) 
@@ -141,7 +141,6 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
         tSet=tSet.sort_values(by='start')
 
         if len(tSet)>=minGuides:
-            
             if len(tSet)<minGuidesInAnElement:
                 minGuidesInAnElement=len(tSet)
 
@@ -174,10 +173,10 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
     
     ## Now that we've made selections per guide, go back and pull in info from all guide-target pairs where
     ##  that guide has been selected for at least one target
-    final = pd.merge(df, chosen[['GuideSequenceWithPAM']].drop_duplicates())
+    final = pd.merge(df, chosen[[seqCol]].drop_duplicates())
 
     print(minGuidesInAnElement, "Minimum guides per element")
-    print("Selected " + str(len(chosen[['GuideSequenceWithPAM']].drop_duplicates())) + " unique guides in selectNguidesPerElement.")
+    print("Selected " + str(len(chosen[[seqCol]].drop_duplicates())) + " unique guides in selectNguidesPerElement.")
     return final
 
 
@@ -283,11 +282,12 @@ def main(args):
     includeGuides = loadForceGuides(args.forceGuides)
 
     if args.nGuidesPerElement > 0:
-        selected = selectNguidesPerElement(guides, args.nGuidesPerElement, columnName="guideSet", minGuides=0, method=args.selectMethod, includeGuides=includeGuides, trimElements=args.trimElements)
+        selected = selectNguidesPerElement(guides, args.nGuidesPerElement, columnName="guideSet", minGuides=0, method=args.selectMethod, includeGuides=includeGuides, trimElements=args.trimElements, seqCol=args.seqCol)
     else:
         print("Keeping all guides because --nGuidesPerElement is 0.")
         selected = guides
 
+    print(len(selected), "after selection")
     if (args.nCtrls > 0):
         negCtrls = getNegativeControlGuides(args.negCtrlList, args.nCtrls, args.excludeRestrictionSites, args.vectorDesigns, args.vector)
         combined = pd.concat([selected, negCtrls])
@@ -308,7 +308,8 @@ def main(args):
     try:
         writeBed(design[['chr','start','end','name']].drop_duplicates(), os.path.join(args.outdir, args.PoolID + ".design.bed"))
     except:
-        print("Failed to write BED file.", sys.exc_info()[0])
+        print("did not write .bed - probably lacking chr/start/end")
+
 
 
 if __name__ == '__main__':

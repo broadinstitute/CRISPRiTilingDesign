@@ -5,8 +5,8 @@ import numpy as np
 
 def parseargs():
     parser = argparse.ArgumentParser(description='filter guides by polyT and spacing')
-    parser.add_argument('--polyTmax', help="guides with this or longer polyT sites will be removed", default=4)
-    parser.add_argument('--minStartDist', help="minimum space between guide starts", default=5)
+    parser.add_argument('--polyTmax', help="guides with this or longer polyT sites will be removed", default=4, type=int)
+    parser.add_argument('--minStartDistance', help="minimum space between guide starts", default=5, type=int)
     parser.add_argument('--infile', help="input bed file", required=True)
     parser.add_argument('--outfile', help="output bed file", required=True)
     args = parser.parse_args()
@@ -27,9 +27,10 @@ if __name__ == '__main__':
     def remove_too_close(grp):
         starts = grp.start.values
         dists = abs(starts.reshape((-1, 1)) - starts.reshape((1, -1)))
-        dists = np.maximum(dists, np.tri(dists.shape[0]).T * (1 + args.minStartDist))
-        bad = (dists < args.minStartDist).sum(axis=1) > 0
+        dists = np.maximum(dists, np.tri(dists.shape[0]).T * (1 + args.minStartDistance))
+        bad = (dists < args.minStartDistance).sum(axis=1) > 0
         return grp.loc[~bad, :]
 
     guides = guides.groupby("gRNA group").apply(remove_too_close)
+    guides = guides.rename(columns={"gRNA group": "guideSet"})
     guides.to_csv(args.outfile, sep="\t", index=None)

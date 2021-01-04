@@ -82,7 +82,7 @@ mkdir -p $DIR $DIR/design/
 python $CODEDIR/src/filter_guides.py \
   --infile $PROJECT/GuideScan_batch_output.csv \
   --outfile $DIR/design/filteredGuides.bed.preDesign.bed \
-  --polyTmax 4 --minStartDistance 5
+  --polyTmax 4 --minStartDistance 0
 
 
 ## Make version openable in IGV for looking at locations

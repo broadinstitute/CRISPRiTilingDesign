@@ -51,7 +51,7 @@ def parseargs(required_args=True):
 
 def designPegRNAsForVariant(edit, guides, args):
 
-    ## Expand bounds to acccount for max distance to PE3, RT template, etc.
+    ## Expand bounds to account for max distance to PE3, RT template, etc.
     EXTEND = 200
     seqStart = edit['start'] - EXTEND
     seqEnd = edit['end'] + EXTEND
@@ -120,6 +120,8 @@ def main(args):
         if (len(curr) > 0):
             results = results.append(curr)[curr.columns.tolist()]
     
+    results = results.fillna(0)
+    results = results.astype(str)
     results.to_csv(args.outfile, sep='\t', header=True, index=False)
 
 

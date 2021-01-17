@@ -85,6 +85,8 @@ class PrimeEditor:
             ("spacer" , self.spacer),
             ("primerBindingSite" , self.primerBindingSite),
             ("rtTemplate" , self.rtTemplate),
+            ("rtGCpct" , SeqUtils.GC(self.rtTemplate)),
+            ("uuCount", self.getExtensionSequence().count("TT")),
             ("pegRNASequence" , self.getPegRNASequence()),
             ("SpacerOligoTop", "CACC" + self.spacerPlusG + "GTTTT"),
             ("SpacerOligoBot", str("CTCTAAAAC" + Seq(self.spacerPlusG).reverse_complement())),

@@ -43,7 +43,9 @@ def parseargs(required_args=True):
     parser.add_argument('--maxRTPastEdit', default=20, type=int, help="Minimum length of the RT template")
     parser.add_argument('--maxRTTemplateLength', default=78, type=int, help="Maximum length of the RT template (78 = what was demonstrated with LoxP insertion)")
     parser.add_argument('--minPE3NickDistance', default=50, type=int, help="Minimum distance between the first nick and second PE3 nick")
-    parser.add_argument('--maxPE3NickDistance', default=0, type=int, help="Maximum distance between the first nick and second PE3 nick")
+    parser.add_argument('--maxPE3NickDistance', default=0, type=int, help="Maximum distance between the first nick and second PE3 nick. Default value (0) ignores PE3 nicking")
+    parser.add_argument('--minPbsGcContent', default=30, type=int, help="Minimum GC content of the primer binding sequence")
+    parser.add_argument('--minRTGcContent', default=30, type=int, help="Minimum GC content of the RT template")
 
     args = parser.parse_args()
     return(args)
@@ -93,6 +95,17 @@ def designPegRNAsForVariant(edit, guides, args):
     return pegs
 
 
+def filterPegs(pegs, minPbsGcContent=0, minRTGcContent=0):
+    fp = pegs
+
+    ## Filter based on GC content:
+    fp = fp[fp["pbsGCpct"] >= minPbsGcContent] 
+    fp = fp[fp["rtGCpct"] >= minRTGcContent]
+
+    ## To do: Add filter to choose only the closest spacer? 
+
+    return fp
+
 
 def main(args):
     guides = read_table(args.guides)
@@ -121,6 +134,7 @@ def main(args):
             results = results.append(curr)[curr.columns.tolist()]
     
     results = results.fillna(0)
+    results = filterPegs(results, args.minPbsGcContent, args.minRTGcContent)
     results = results.astype(str)
     results.to_csv(args.outfile, sep='\t', header=True, index=False)
 

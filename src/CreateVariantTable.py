@@ -29,6 +29,7 @@ def parseargs():
     parser.add_argument('--offset', type=int, help="Sliding resolution")
     parser.add_argument('--mutagenesis', default=False, help="Include mutagenesis of each subsequence")
     parser.add_argument('--scramble', default=False, help="Include scramble (reverse) of each subsequence")
+    parser.add_argument('--replaceWithN', default=False, help="For each window, include a pegRNA encode an N in the pegRNA rather than mutagenesis or scramble")
     parser.add_argument('--includeRef', default=False, help="Include a variant to convert ref to ref nucleotide (no change)")
 
     args = parser.parse_args()
@@ -36,18 +37,19 @@ def parseargs():
 
 
 ###############################################
-def addVariant(edits, chr, currStart, currEnd, currSeq, newSeq):
+def addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName):
     edit = pd.Series( OrderedDict(( 
             ('chr', chr), 
             ('start', str(currStart)), 
             ('end', str(currEnd)), 
             ('name', chr + ':' + str(currStart) + ':' + str(currSeq) + '>' + newSeq),
             ('ref', currSeq), 
-            ('alt', newSeq))))
+            ('alt', newSeq),
+            ('region', seqName))))
     edits = edits.append(edit, ignore_index=True)[edit.index.tolist()]
     return edits
 
-def createVariants(chr, start, end, seq, window, offset, mutagenesis=True, scramble=False, includeRef=True):
+def createVariants(chr, start, end, seqName, seq, window, offset, mutagenesis=True, scramble=False, replaceWithN=False, includeRef=True):
 
     edits = pd.DataFrame()
 
@@ -60,16 +62,21 @@ def createVariants(chr, start, end, seq, window, offset, mutagenesis=True, scram
             for newBase in ['A','T','C','G']:
                 newSeq = newBase * (currEnd-currStart)
                 if (newSeq != currSeq):
-                    edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq)
+                    edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
 
         if scramble:
             ## Scramble by reversing (not reverse complementing) the sequence
             newSeq = currSeq[::-1]
-            edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq)
+            edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
+
+        if replaceWithN:
+            ## Replace with Ns
+            newSeq = "N" * len(currSeq)
+            edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
 
         if includeRef:
             newSeq = currSeq
-            edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq)
+            edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
 
 
         ## Increment the window
@@ -79,8 +86,8 @@ def createVariants(chr, start, end, seq, window, offset, mutagenesis=True, scram
     return edits
 
 
-def createVariantsMutagenesis(chr, start, end, seq, mutagenesis=True, scramble=False, includeRef=True):
-    return createVariants(chr, start, end, seq, 1, 1, mutagenesis, scramble, includeRef)
+def createVariantsMutagenesis(chr, start, end, seqName, seq, mutagenesis=True, scramble=False, replaceWithN=False, includeRef=True):
+    return createVariants(chr, start, end, seq, 1, 1, mutagenesis, scramble, replaceWithN, includeRef)
 
 
 ##############################################
@@ -99,11 +106,13 @@ def main(args):
             row['chr'], 
             row['start'], 
             row['end'], 
+            row['name'], 
             seq, 
             args.window, 
             args.offset, 
             args.mutagenesis,
             args.scramble,
+            args.replaceWithN,
             args.includeRef)
         if (len(curr) > 0):
             results = results.append(curr)[curr.columns.tolist()]

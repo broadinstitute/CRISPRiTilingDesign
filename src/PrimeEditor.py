@@ -103,14 +103,14 @@ class PrimeEditor:
             ("ExtensionOligoTop", "GTGC" + self.getExtensionSequence()),
             ("ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement())),
             ("GibsonOligoTop", "aaaggacgaaacacc" + self.spacerPlusG + "GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAAC"),
-            ("GibsonOligoBot", "gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT"),
+            ("GibsonOligoBot", str("gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT")),
             ("sgOpti.pegRNASequence" , self.getPegRNASequence(scaffold=OPTI_SCAFFOLD)),
             ("sgOpti.SpacerOligoTop", "CACC" + self.spacerPlusG + "GTTTA"),
             ("sgOpti.SpacerOligoBot", str("CTCTTAAAC" + Seq(self.spacerPlusG).reverse_complement())),
             ("sgOpti.ExtensionOligoTop", "GTGC" + self.getExtensionSequence()),
             ("sgOpti.ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement())),
             ("sgOpti.GibsonOligoTop", "aaaggacgaaacacc" + self.spacerPlusG + "GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAAC"),
-            ("sgOpti.GibsonOligoBot", "gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT")
+            ("sgOpti.GibsonOligoBot", str("gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT"))
             )))
 
     def getPositionRelativeToNick(self):
@@ -327,17 +327,21 @@ def getAllPegRNAs(
     maxRTPastEdit,
     maxRTTemplateLength):
     
-    results = pd.DataFrame()
+    results = []
     for pbsLength in range(minPbsLength, maxPbsLength+1):
         for rtLengthPastEdit in range(minRTPastEdit, maxRTPastEdit+1):
             try:
                 pegRNA = getPegRNA(chromosome, seqStart, seqEnd, seq, guideStart, guideEnd, guideStrand, variantStart, variantEnd, replacementSeq, pbsLength, rtLengthPastEdit)
                 if len(pegRNA.rtTemplate) <= maxRTTemplateLength:
                     curr = pegRNA.toPandas()
-                    results = results.append(curr, ignore_index=True)[curr.index.tolist()]
+                    results.append(curr)
             except ValueError:
                 continue
-    return results
+
+    if (len(results) > 0):
+        return pd.concat(results, axis=1).transpose()
+    else:
+        return pd.DataFrame()
 
 
 def reverseStrand(strand):
@@ -353,6 +357,7 @@ def getNickingGuides(guides, chromosome, seqStart, seqEnd, seq, guideStart, guid
     guide = GenomicRange(chromosome, guideStart, guideEnd, guideStrand)
     editnick = guide.three_prime().shift(NICK_POSITION, considerStrand=True)
 
+    ## To do: Speed up code by replacing pd.DataFrame().append() with pd.concat()
     results = pd.DataFrame()
     
     if maxPE3NickDistance > 0:

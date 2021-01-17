@@ -72,7 +72,7 @@ def designPegRNAsForVariant(edit, guides, args):
     seq = BedTool.seq((edit['chr'], seqStart, seqEnd), fasta)
 
     ## For each potential editing gRNA:
-    pegs = pd.DataFrame()
+    pegs = []
     for index, guide in guides.iterrows():
         curr = getAllPegRNAs(edit['chr'], seqStart, seqEnd, seq, guide['start'], guide['end'], guide['strand'], edit['start'], edit['end'], edit['alt'], args.minPbsLength, args.maxPbsLength, args.minRTPastEdit, args.maxRTPastEdit, args.maxRTTemplateLength)
         if (len(curr) > 0):
@@ -84,12 +84,16 @@ def designPegRNAsForVariant(edit, guides, args):
                     combos = [ row1.append(row2) for i1,row1 in curr.iterrows() for i2,row2 in nickGuides.iterrows() ]
                     curr = pd.DataFrame(combos)
 
-            pegs = pegs.append(curr)[curr.columns.tolist()]
+            pegs.append(curr)
 
-    ## Format output
-    pegs['variantName'] = edit['name']
-    pegs['ref'] = edit['ref']
-    pegs['alt'] = edit['alt']
+    if (len(pegs) > 0):
+        pegs = pd.concat(pegs)
+        ## Format output
+        pegs['variantName'] = edit['name']
+        pegs['ref'] = edit['ref']
+        pegs['alt'] = edit['alt']
+    else:
+        pegs = pd.DataFrame()
 
     ## Return
     return pegs
@@ -127,12 +131,14 @@ def main(args):
     else:
         edits = read_table(args.edits)
 
-    results = pd.DataFrame()
+    results = [] #pd.DataFrame()
     for index, edit in edits.iterrows():
         curr = designPegRNAsForVariant(edit, guides, args)
         if (len(curr) > 0):
-            results = results.append(curr)[curr.columns.tolist()]
+            results.append(curr)
+            #results = results.append(curr)[curr.columns.tolist()]
     
+    results = pd.concat(results)
     results = results.fillna(0)
     results = filterPegs(results, args.minPbsGcContent, args.minRTGcContent)
     results = results.astype(str)

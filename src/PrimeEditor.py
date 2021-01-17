@@ -16,11 +16,21 @@ from collections import OrderedDict
 from JuicerCRISPRiDesign import *
 
 NICK_POSITION=-3
+SCAFFOLD     ="GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC"
+OPTI_SCAFFOLD="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC"
 
 class PrimeEditor:
     ## TODO:  Change to extend pd.DataFrame or pd.Series
 
-    def __init__(self, spacer, primerBindingSite, rtTemplate, guideRegion=None, variantRegion=None, pbsRegion=None, rtTemplateRegion=None, scaffold="GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC"):
+    def __init__(
+        self, 
+        spacer, 
+        primerBindingSite, 
+        rtTemplate, 
+        guideRegion=None, 
+        variantRegion=None, 
+        pbsRegion=None, 
+        rtTemplateRegion=None):
         '''
         spacer, primerBindingSite, rtTemplate are strings representing sequence in pegRNA.
         Regions are in genomic coordinates
@@ -32,14 +42,14 @@ class PrimeEditor:
         self.spacer = str(spacer)
         self.primerBindingSite = str(primerBindingSite)
         self.rtTemplate = str(rtTemplate)
-        self.scaffold = str(scaffold)
+        #self.scaffold = str(scaffold)
         self.spacerPlusG = prependGifNecessary(self.spacer)
 
     def __str__(self):
         return "PrimeEditor: "+ str(self.getPegRNASequence())
         
-    def getPegRNASequence(self):
-        return self.spacerPlusG + self.scaffold + self.getExtensionSequence()
+    def getPegRNASequence(self, scaffold=SCAFFOLD):
+        return self.spacerPlusG + scaffold + self.getExtensionSequence()
     
     def getExtensionSequence(self):
         return self.rtTemplate + self.primerBindingSite
@@ -93,7 +103,14 @@ class PrimeEditor:
             ("ExtensionOligoTop", "GTGC" + self.getExtensionSequence()),
             ("ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement())),
             ("GibsonOligoTop", "aaaggacgaaacacc" + self.spacerPlusG + "GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAAC"),
-            ("GibsonOligoBot", "gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT")
+            ("GibsonOligoBot", "gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT"),
+            ("sgOpti.pegRNASequence" , self.getPegRNASequence(scaffold=OPTI_SCAFFOLD)),
+            ("sgOpti.SpacerOligoTop", "CACC" + self.spacerPlusG + "GTTTA"),
+            ("sgOpti.SpacerOligoBot", str("CTCTTAAAC" + Seq(self.spacerPlusG).reverse_complement())),
+            ("sgOpti.ExtensionOligoTop", "GTGC" + self.getExtensionSequence()),
+            ("sgOpti.ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement())),
+            ("sgOpti.GibsonOligoTop", "aaaggacgaaacacc" + self.spacerPlusG + "GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAAC"),
+            ("sgOpti.GibsonOligoBot", "gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT")
             )))
 
     def getPositionRelativeToNick(self):

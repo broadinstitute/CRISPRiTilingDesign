@@ -1,12 +1,10 @@
 ###############################################################################
-## Library code for designing CRISPRi screens
+## Combining pegRNA pools for oligo orders
 ## Jesse Engreitz
-## November 10, 2019
-## Based on Charlie's gRNA design
-## Tested with:  "use .python-3.5.1; source /seq/lincRNA/Ben/VENV_MIP/bin/activate"
+## January 18, 2021
+## Tested on Stanford Sherlock cluster with conda environment
 
-## TODO: Factor out helper code
-
+import CombineGuidePools
 
 from __future__ import division
 import pandas as pd
@@ -26,7 +24,6 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from JuicerCRISPRiDesign import *
-
 
 
 def parseargs(required_args=True):

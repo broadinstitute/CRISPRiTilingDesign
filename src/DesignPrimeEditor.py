@@ -27,16 +27,25 @@ def parseargs(required_args=True):
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
     
+    ## Provide either the variant on the command line:
     parser.add_argument('--chr', help="Chromosome")
     parser.add_argument('--start', type=int, help="Start position for edit")
     parser.add_argument('--end', type=int, help="End position for edit")
     parser.add_argument('--ref', type=str, help="Confirm the genomic sequence intended to edit")
     parser.add_argument('--alt', type=str, help="Desired edited sequence")
-    parser.add_argument('--edits', help="Input file with columns: chr start end name ref alt")
-    parser.add_argument('--outfile', required=required_args, help="Output file")
-    parser.add_argument('--guides', required=required_args, help="Guide file (e.g., .preDesign.bed file output by GetTileGuides.py) [cols: chr     start   end   strand  GuideSequenceWithPAM    guideSet]. Extra columns okay; will be ignored and output unchanged in final table")
-    parser.add_argument('--fasta', required=required_args, default="/seq/lincRNA/data/hg19/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa", help="Indexed FASTA file")
 
+    ## Or provide a table of edits:
+    parser.add_argument('--edits', help="Input file with columns: chr start end name ref alt region")
+
+    ## Other inputs:
+    parser.add_argument('--guides', required=required_args, help="Input guide file (e.g., .preDesign.bed file output by GetTileGuides.py) [cols: chr     start   end   strand  GuideSequenceWithPAM    guideSet]. Extra columns okay; will be ignored and output unchanged in final table")
+    parser.add_argument('--fasta', required=required_args, default="/seq/lincRNA/data/hg19/UCSC/hg19/Sequence/WholeGenomeFasta/genome.fa", help="Input indexed FASTA file of genome")
+
+    ## Output files and options
+    parser.add_argument('--outfile', required=required_args, help="Filebase for output files")
+    parser.add_argument('--splitOutputByRegion', action='store_true', default=False, help="Set to true to output separate design files for each 'region' in the input edits file")
+
+    ## pegRNA design options:
     parser.add_argument('--minPbsLength', default=8, type=int, help="Minimum length of the primer binding sequence")
     parser.add_argument('--maxPbsLength', default=31, type=int, help="Maximum length of the primer binding sequence")
     parser.add_argument('--minRTPastEdit', default=8, type=int, help="Minimum length of the RT template")
@@ -44,8 +53,9 @@ def parseargs(required_args=True):
     parser.add_argument('--maxRTTemplateLength', default=78, type=int, help="Maximum length of the RT template (78 = what was demonstrated with LoxP insertion)")
     parser.add_argument('--minPE3NickDistance', default=50, type=int, help="Minimum distance between the first nick and second PE3 nick")
     parser.add_argument('--maxPE3NickDistance', default=0, type=int, help="Maximum distance between the first nick and second PE3 nick. Default value (0) ignores PE3 nicking")
-    parser.add_argument('--minPbsGcContent', default=30, type=int, help="Minimum GC content of the primer binding sequence")
-    parser.add_argument('--minRTGcContent', default=30, type=int, help="Minimum GC content of the RT template")
+    parser.add_argument('--minPbsGcContent', default=30, type=float, help="Minimum GC content (%%) of the primer binding sequence")
+    parser.add_argument('--minRTGcContent', default=30, type=float, help="Minimum GC content (%%) of the RT template")
+    parser.add_argument('--maxUUcount', default=3, type=float, help="Maximum number of UU dinucleotides in the PBS + RT template (to avoid sequences likely to terminate Pol III Transcription)")
 
     args = parser.parse_args()
     return(args)
@@ -102,12 +112,17 @@ def designPegRNAsForVariant(edit, guides, args):
     return pegs
 
 
-def filterPegs(pegs, minPbsGcContent=0, minRTGcContent=0):
+def filterPegs(pegs, maxUUcount=4, minPbsGcContent=0, minRTGcContent=0):
     fp = pegs
 
     ## Filter based on GC content:
     fp = fp[fp["pbsGCpct"] >= minPbsGcContent] 
     fp = fp[fp["rtGCpct"] >= minRTGcContent]
+
+    ## Filter based on UU count:
+    fp = fp[fp["uuCount"] <= maxUUcount]
+
+    ## ? Remove any pegRNAs that have 7-bp windows with 5 or more T/Us (which would reduce Pol III transcription)
 
     ## To do: Add filter to choose only the closest spacer? 
 
@@ -123,6 +138,12 @@ def pegsToBED(pegTable):
     return bed
 
 
+def getVariantCoverageBedgraph(pegTable):
+    bedgraph = pegTable.groupby(['chr','variantStart','variantEnd']).size().reset_index()
+    return bedgraph
+
+
+
 def main(args):
     guides = read_table(args.guides)
 
@@ -131,6 +152,7 @@ def main(args):
         if not len(guides[col])>0:
             raise ValueError("Guide file must contain column: " + col)
 
+    ## Parse the variants/edits to create
     if args.edits is None:
         edits = pd.DataFrame({ 
             'chr' : [args.chr],
@@ -144,22 +166,32 @@ def main(args):
     else:
         edits = read_table(args.edits)
 
-    results = [] #pd.DataFrame()
+    ## Design pegRNAs
+    results = []
     for index, edit in edits.iterrows():
         curr = designPegRNAsForVariant(edit, guides, args)
         if (len(curr) > 0):
             results.append(curr)
-            #results = results.append(curr)[curr.columns.tolist()]
     
+    ## Format and filter pegRNA list
     results = pd.concat(results)
     results = results.fillna(0)
     results = filterPegs(results, args.minPbsGcContent, args.minRTGcContent)
     results['pegID'] = ["peg"+str(n)+"-"+str(region)+"-"+vname for region,n,vname in zip(results['region'],range(1,len(results)+1),results['variantName'])]
     results = results.astype(str)
-    results.to_csv(args.outfile, sep='\t', header=True, index=False)
 
-    pegsToBED(results).to_csv(args.outfile + ".bed", sep='\t', header=False, index=False)
+    ## Write results
+    results.to_csv(args.outfile+".full.tsv", sep='\t', header=True, index=False)
+    resultsBED = pegsToBED(results)
+    resultsBED.to_csv(args.outfile + ".full.bed", sep='\t', header=False, index=False)
+    resultsBedgraph = getVariantCoverageBedgraph(results)
+    resultsBedgraph.to_csv(args.outfile + ".full.bedgraph", sep='\t', header=False, index=False)
 
+    if args.splitOutputByRegion:
+        for name, resultsGroup in results.groupby('region'):
+            resultsGroup.to_csv(args.outfile+"."+name+".tsv", sep='\t', header=True, index=False)
+            pegsToBED(resultsGroup).to_csv(args.outfile+"."+name+".bed", sep='\t', header=False, index=False)
+            getVariantCoverageBedgraph(resultsGroup).to_csv(args.outfile+"."+name+".bedgraph", sep='\t', header=False, index=False)
 
 if __name__ == '__main__':
     args = parseargs()

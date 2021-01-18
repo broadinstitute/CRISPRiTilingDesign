@@ -92,7 +92,7 @@ def selectBalancedSeqs(origSeq, replacements, n=1, minNewBasesPct=75):
 
 def createVariants(chr, start, end, seqName, seq, window, offset, args): 
 
-    edits = pd.DataFrame()
+    edits = pd.DataFrame()  ## To do:  Change to edits = [] and use pd.concat() instead of df.append() for better speed
 
     if (args.randomBalanced > 0):
         replacementSeqs = getRandomBalancedSeq(window, args.randomBalanced*4, minGcPct=50)

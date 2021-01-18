@@ -82,9 +82,11 @@ def selectBalancedSeqs(origSeq, replacements, n=1, minNewBasesPct=75):
         'seq' : replacements,
         'diff' : [sum(c1!=c2 for c1,c2 in zip(s,origSeq)) / len(origSeq) * 100 for s in replacements]
         })
+
+    replacementsDf = replacementsDf[replacementsDf['diff'] >= minNewBasesPct]
     
     ## Select random N from among the replacements:
-    result = sample(list(replacementsDf['seq']), n)
+    result = sample(list(replacementsDf['seq']), min(n,len(replacementsDf)))
     return result 
 
 
@@ -93,7 +95,7 @@ def createVariants(chr, start, end, seqName, seq, window, offset, args):
     edits = pd.DataFrame()
 
     if (args.randomBalanced > 0):
-        replacementSeqs = getRandomBalancedSeq(window, args.randomBalanced*3, minGcPct=50)
+        replacementSeqs = getRandomBalancedSeq(window, args.randomBalanced*4, minGcPct=50)
 
     if (args.substitute is not None):
         substitutionSeqs = args.substitute.split(',')

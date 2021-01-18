@@ -71,19 +71,21 @@ def designPegRNAsForVariant(edit, guides, args):
     ## Get genomic sequence
     seq = BedTool.seq((edit['chr'], seqStart, seqEnd), fasta)
 
+    ## If this information is provided, filter guides to those corresponding to the edit set
+    if ('region' in edit) and ('guideSet' in guides):
+        guides = guides[guides['guideSet'] == edit['region']]
+
     ## For each potential editing gRNA:
     pegs = []
     for index, guide in guides.iterrows():
         curr = getAllPegRNAs(edit['chr'], seqStart, seqEnd, seq, guide['start'], guide['end'], guide['strand'], edit['start'], edit['end'], edit['alt'], args.minPbsLength, args.maxPbsLength, args.minRTPastEdit, args.maxRTPastEdit, args.maxRTTemplateLength)
         if (len(curr) > 0):
-
             ## Get nicking sites (PE3)
             if args.maxPE3NickDistance > 0:
                 nickGuides = getNickingGuides(guides, edit['chr'], seqStart, seqEnd, seq, guide['start'], guide['end'], guide['strand'], args.minPE3NickDistance, args.maxPE3NickDistance)
                 if (len(nickGuides) > 0):
                     combos = [ row1.append(row2) for i1,row1 in curr.iterrows() for i2,row2 in nickGuides.iterrows() ]
                     curr = pd.DataFrame(combos)
-
             pegs.append(curr)
 
     if (len(pegs) > 0):
@@ -92,6 +94,7 @@ def designPegRNAsForVariant(edit, guides, args):
         pegs['variantName'] = edit['name']
         pegs['ref'] = edit['ref']
         pegs['alt'] = edit['alt']
+        pegs['region'] = edit['region']
     else:
         pegs = pd.DataFrame()
 
@@ -111,6 +114,15 @@ def filterPegs(pegs, minPbsGcContent=0, minRTGcContent=0):
     return fp
 
 
+def pegsToBED(pegTable):
+    bed = []
+    for idx,row in pegTable.iterrows():
+        bed.append(getPegRNAFromPandas(row).toBED())
+    bed = pd.concat(bed, axis=1).transpose()
+    bed['name'] = pegTable['pegID'].values
+    return bed
+
+
 def main(args):
     guides = read_table(args.guides)
 
@@ -126,7 +138,8 @@ def main(args):
             'end' : [args.end],
             'ref' : [args.ref],
             'alt' : [args.alt],
-            'name' : ["Custom"]
+            'name' : ["Custom"],
+            'region' : ["CustomRegion"]
             })
     else:
         edits = read_table(args.edits)
@@ -141,9 +154,11 @@ def main(args):
     results = pd.concat(results)
     results = results.fillna(0)
     results = filterPegs(results, args.minPbsGcContent, args.minRTGcContent)
+    results['pegID'] = ["peg"+str(n)+"-"+str(region)+"-"+vname for region,n,vname in zip(results['region'],range(1,len(results)+1),results['variantName'])]
     results = results.astype(str)
     results.to_csv(args.outfile, sep='\t', header=True, index=False)
 
+    pegsToBED(results).to_csv(args.outfile + ".bed", sep='\t', header=False, index=False)
 
 
 if __name__ == '__main__':

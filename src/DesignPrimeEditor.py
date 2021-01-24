@@ -57,8 +57,13 @@ def parseargs(required_args=True):
     parser.add_argument('--minRTGcContent', default=30, type=float, help="Minimum GC content (%%) of the RT template")
     parser.add_argument('--maxUUcount', default=3, type=float, help="Maximum number of UU dinucleotides in the PBS + RT template (to avoid sequences likely to terminate Pol III Transcription)")
 
+    ## Options for including sequences for pooled cloning
+    parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs")
+    parser.add_argument('--vector', type=str, help="Name of vector to index into vectorDesigns")
+
     args = parser.parse_args()
     return(args)
+
 
 
 def designPegRNAsForVariant(edit, guides, args):
@@ -112,6 +117,7 @@ def designPegRNAsForVariant(edit, guides, args):
     return pegs
 
 
+
 def filterPegs(pegs, maxUUcount=4, minPbsGcContent=0, minRTGcContent=0):
     fp = pegs
 
@@ -129,6 +135,22 @@ def filterPegs(pegs, maxUUcount=4, minPbsGcContent=0, minRTGcContent=0):
     return fp
 
 
+def addPoolCloningOligos(df, vectorDesignFile, vector):  #, MapLength=21):
+    vectorDesigns = read_table(vectorDesignFile)
+    if not vector in vectorDesigns['CloningDesign'].values:
+        raise ValueError("Chosen vector design '"+vector+"' is not in the Vector Design file.")
+    leftGA = vectorDesigns.loc[vectorDesigns['CloningDesign'] == vector].LeftGibsonArm.item()
+    rightGA = vectorDesigns.loc[vectorDesigns['CloningDesign'] == vector].RightGibsonArm.item()
+    scaffold = vectorDesigns.loc[vectorDesigns['CloningDesign'] == vector].pegRNAScaffold.item()
+    df["GuideSequence"]=df['spacer'].apply(lambda x: prependGifNecessary(x))
+    df["GuideSequenceMinusG"]=df["GuideSequence"].apply(lambda x: trimG(x))
+    df["LeftGA"]=leftGA
+    df["RightGA"]=rightGA
+    df["CoreOligo"]=[leftGA+getPegRNAFromPandas(row).getPegRNASequence(scaffold=scaffold)+leftGA for idx,row in df.iterrows()]
+    #df["MappingSequence"]=(df["GuideSequenceMinusG"]+df["RightGA"]).apply(lambda x: x[0:MapLength])
+    return df
+    
+
 def pegsToBED(pegTable):
     bed = []
     for idx,row in pegTable.iterrows():
@@ -142,6 +164,20 @@ def getVariantCoverageBedgraph(pegTable):
     bedgraph = pegTable.groupby(['chr','variantStart','variantEnd']).size().reset_index()
     return bedgraph
 
+
+def writePegRNAs(results, outfile, splitOutputByRegion):
+    os.makedirs(os.path.dirname(outfile), exist_ok=True)
+    results.to_csv(outfile+".full.tsv", sep='\t', header=True, index=False)
+    resultsBED = pegsToBED(results)
+    resultsBED.to_csv(outfile + ".full.bed", sep='\t', header=False, index=False)
+    resultsBedgraph = getVariantCoverageBedgraph(results)
+    resultsBedgraph.to_csv(outfile + ".full.bedgraph", sep='\t', header=False, index=False)
+
+    if splitOutputByRegion:
+        for name, resultsGroup in results.groupby('region'):
+            resultsGroup.to_csv(outfile+"."+name+".tsv", sep='\t', header=True, index=False)
+            pegsToBED(resultsGroup).to_csv(outfile+"."+name+".bed", sep='\t', header=False, index=False)
+            getVariantCoverageBedgraph(resultsGroup).to_csv(outfile+"."+name+".bedgraph", sep='\t', header=False, index=False)
 
 
 def main(args):
@@ -180,18 +216,13 @@ def main(args):
     results['pegID'] = ["peg"+str(n)+"-"+str(region)+"-"+vname for region,n,vname in zip(results['region'],range(1,len(results)+1),results['variantName'])]
     results = results.astype(str)
 
-    ## Write results
-    results.to_csv(args.outfile+".full.tsv", sep='\t', header=True, index=False)
-    resultsBED = pegsToBED(results)
-    resultsBED.to_csv(args.outfile + ".full.bed", sep='\t', header=False, index=False)
-    resultsBedgraph = getVariantCoverageBedgraph(results)
-    resultsBedgraph.to_csv(args.outfile + ".full.bedgraph", sep='\t', header=False, index=False)
+    ## Add pool cloning sequences, if requested
+    if args.vector:
+        results = addPoolCloningOligos(results, args.vectorDesigns, args.vector)
 
-    if args.splitOutputByRegion:
-        for name, resultsGroup in results.groupby('region'):
-            resultsGroup.to_csv(args.outfile+"."+name+".tsv", sep='\t', header=True, index=False)
-            pegsToBED(resultsGroup).to_csv(args.outfile+"."+name+".bed", sep='\t', header=False, index=False)
-            getVariantCoverageBedgraph(resultsGroup).to_csv(args.outfile+"."+name+".bedgraph", sep='\t', header=False, index=False)
+    ## Write results
+    writePegRNAs(results, args.outfile, args.splitOutputByRegion)
+
 
 if __name__ == '__main__':
     args = parseargs()

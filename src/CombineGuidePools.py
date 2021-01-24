@@ -65,10 +65,11 @@ Terminology: "subpool" refers to a set of oligos with the same PCR handles on th
 
 def addHandles(df, fwdPrimer, revPrimer):
     ''' Adds PCR handles for PCR1 '''
-    if np.isnan(fwdPrimer):
-        fwdPrimer = ''
-    if np.isnan(revPrimer):
-        revPrimer = ''
+
+    #if np.isnan(fwdPrimer):
+    #    fwdPrimer = ''
+    #if np.isnan(revPrimer):
+    #    revPrimer = ''
 
     df["FwdPrimer"] = fwdPrimer
     df["RevPrimer"] = revPrimer
@@ -163,7 +164,7 @@ def main(args):
     
     ## Write final files
     writeDesignFile(merged, args.outbase + ".design.txt")
-    writePcrPrimers(merged, args.outbase + ".primers.txt") 
+    writePcrPrimers(merged, args.outbase + ".primersToOrder.txt") 
     writeSubpoolSummary(merged, args.outbase + '.subpools.txt')
     writeSequencesToOrder(oligos, args.outbase + ".SequencesToOrder.txt", args.fillToOligoPoolSize, args.includeReverseComplements)
 

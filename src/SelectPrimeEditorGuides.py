@@ -156,7 +156,8 @@ def main(args):
     ## Write results
     DesignPrimeEditor.writePegRNAs(results, args.outfile, args.splitOutputByRegion)
 
-    #stats = computeSelectionStats(results, variants)
+    ## Plot statistics
+    DesignPrimeEditor.plotPrimeEditorStats(results, args.outfile, args.edits, args.splitOutputByRegion)
 
 
 if __name__ == '__main__':

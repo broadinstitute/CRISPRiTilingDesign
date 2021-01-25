@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 import argparse
 from pandas.io.parsers import read_table
-
+import subprocess
 
 def parseargs(required_args=True):
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -165,6 +165,21 @@ def getVariantCoverageBedgraph(pegTable):
     return bedgraph
 
 
+def plotPrimeEditorStatsHelper(pegFile, editFile, outfile, title):
+    if editFile is None:
+        editFile = "NA"
+
+    subprocess.Popen("Rscript --vanilla {}/PlotPrimeEditorStats.R --input {} --edits {} --outfile {} --figureLabel {}".format(os.path.dirname(__file__), pegFile, editFile, outfile, title), shell=True)
+
+
+def plotPrimeEditorStats(selectedPegs, outbase, editFile, splitOutputByRegion=False):
+    plotPrimeEditorStatsHelper(outbase+".full.tsv", editFile, outbase+".full.stats.pdf", "AllRegions")
+
+    if splitOutputByRegion:
+        for name, resultsGroup in selectedPegs.groupby('region'):
+            plotPrimeEditorStatsHelper(outbase+"."+name+".tsv", editFile, outbase+"."+name+".stats.pdf", name)
+
+
 def writePegRNAs(results, outfile, splitOutputByRegion):
     os.makedirs(os.path.dirname(outfile), exist_ok=True)
     results.to_csv(outfile+".full.tsv", sep='\t', header=True, index=False)
@@ -223,6 +238,8 @@ def main(args):
     ## Write results
     writePegRNAs(results, args.outfile, args.splitOutputByRegion)
 
+    ## Plot statistics
+    plotPrimeEditorStats(results, args.outfile, args.edits, args.splitOutputByRegion)
 
 if __name__ == '__main__':
     args = parseargs()

@@ -123,7 +123,7 @@ def writeSequencesToOrder(oligos, outfile, poolMax, includeReverseComplements):
         towrite = oligos[0:poolMax]
 
     elif poolMax > 0 and len(oligos) < poolMax:
-        print("Adding copies of oligos (and reverse complements) to bring pool from " + str(len(oligos)) + " to " + str(poolMax))
+        print("Adding copies of oligos (and, if requested, reverse complements) to bring pool from " + str(len(oligos)) + " to " + str(poolMax))
         strand="-"
         towrite = oligos.copy()
         oligosRevComp = pd.Series([str(Seq(oligo).reverse_complement()) for key,oligo in oligos.iteritems()])

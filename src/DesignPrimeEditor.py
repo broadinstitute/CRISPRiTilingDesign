@@ -1,11 +1,6 @@
 ###############################################################################
-## Library code for designing CRISPRi screens
+## Library code for designing pegRNA screens
 ## Jesse Engreitz
-## November 10, 2019
-## Based on Charlie's gRNA design
-## Tested with:  "use .python-3.5.1; source /seq/lincRNA/Ben/VENV_MIP/bin/activate"
-
-## TODO: Factor out helper code
 
 
 from PrimeEditor import *
@@ -16,6 +11,7 @@ import numpy as np
 import argparse
 from pandas.io.parsers import read_table
 import subprocess
+from JuicerCRISPRiDesign import trimG
 
 def parseargs(required_args=True):
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -58,15 +54,17 @@ def parseargs(required_args=True):
     parser.add_argument('--maxUUcount', default=3, type=float, help="Maximum number of UU dinucleotides in the PBS + RT template (to avoid sequences likely to terminate Pol III Transcription)")
 
     ## Options for including sequences for pooled cloning
-    parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs")
+    parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs. Note that U6/PolIII promoters should include a 'G' in final position of first Gibson arm; spacers will be output with 1 G trimmed if it exists in first position, so all spacers when transcribed will start with G and be either 21 or 20")
     parser.add_argument('--vector', type=str, help="Name of vector to index into vectorDesigns")
+
+    parser.add_argument('--ignoreRegions', action='store_true', default=False, help="Ignore the 'region' or 'guideSet' columns in the input edits and guides files, and take guide spacers from any region (useful if you designed gRNAs against one set of targets and want to reuse them for aonther set)")
 
     args = parser.parse_args()
     return(args)
 
 
 
-def designPegRNAsForVariant(edit, guides, args):
+def designPegRNAsForVariant(edit, guides, args, ignoreRegions=False):
 
     ## Expand bounds to account for max distance to PE3, RT template, etc.
     EXTEND = 200
@@ -87,8 +85,9 @@ def designPegRNAsForVariant(edit, guides, args):
     seq = BedTool.seq((edit['chr'], seqStart, seqEnd), fasta)
 
     ## If this information is provided, filter guides to those corresponding to the edit set
-    if ('region' in edit) and ('guideSet' in guides):
-        guides = guides[guides['guideSet'] == edit['region']]
+    if not ignoreRegions:
+        if ('region' in edit) and ('guideSet' in guides):
+            guides = guides[guides['guideSet'] == edit['region']]
 
     ## For each potential editing gRNA:
     pegs = []
@@ -102,6 +101,7 @@ def designPegRNAsForVariant(edit, guides, args):
                     combos = [ row1.append(row2) for i1,row1 in curr.iterrows() for i2,row2 in nickGuides.iterrows() ]
                     curr = pd.DataFrame(combos)
             pegs.append(curr)
+
 
     if (len(pegs) > 0):
         pegs = pd.concat(pegs)
@@ -146,7 +146,7 @@ def addPoolCloningOligos(df, vectorDesignFile, vector):  #, MapLength=21):
     df["GuideSequenceMinusG"]=df["GuideSequence"].apply(lambda x: trimG(x))
     df["LeftGA"]=leftGA
     df["RightGA"]=rightGA
-    df["CoreOligo"]=[leftGA+getPegRNAFromPandas(row).getPegRNASequence(scaffold=scaffold)+leftGA for idx,row in df.iterrows()]
+    df["CoreOligo"]=[leftGA+trimG(getPegRNAFromPandas(row).getPegRNASequence(prependGifNecessary=True,scaffold=scaffold))+rightGA for idx,row in df.iterrows()]
     #df["MappingSequence"]=(df["GuideSequenceMinusG"]+df["RightGA"]).apply(lambda x: x[0:MapLength])
     return df
     
@@ -217,13 +217,16 @@ def main(args):
     else:
         edits = read_table(args.edits)
 
+    if not args.ignoreRegions:
+        print("Using the 'region' and 'guideSet' columns to select guide spacers.  Set --ignoreRegions to disable.")
+
     ## Design pegRNAs
     results = []
     for index, edit in edits.iterrows():
-        curr = designPegRNAsForVariant(edit, guides, args)
+        curr = designPegRNAsForVariant(edit, guides, args, args.ignoreRegions)
         if (len(curr) > 0):
             results.append(curr)
-    
+
     ## Format and filter pegRNA list
     results = pd.concat(results)
     results = results.fillna(0)

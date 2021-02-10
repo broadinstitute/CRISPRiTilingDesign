@@ -19,7 +19,11 @@ warnings.filterwarnings("ignore")
 
 from JuicerCRISPRiDesign import *
 import DesignPrimeEditor
+import ReadUtils
+import PrimeEditor
 
+
+RandomState = np.random.RandomState(1)   
 
 def parseargs():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -44,6 +48,7 @@ Logic:
     
     parser.add_argument('-i', '--input', action='append', help="Input design file (output by DesignPrimeEditor.py). Specify multiple times, in order, to select pegRNAs from these design files in order of priority.")
     parser.add_argument('--guidesPerVariant', type=int, default=1, help="Maximum number of pegRNAs to select per variant.")
+    parser.add_argument('--strictPegRegions', default=None, help="Optional BED file containing strict regions; pegRNAs (spacer through PBS) must fall entirely in these boundaries")
     parser.add_argument('--spacerChoice', default='mixed', choices=['mixed','closest'], help="closest: Always choose the closest spacer. mixed: Choose the closest spacer a majority of the time, but include more distant spacers if available.")
     parser.add_argument('--edits', help="Input file with columns: chr start end name ref alt region")
 
@@ -62,7 +67,7 @@ def selectByPriority(pegs, n):
         if nSelected < n:
             curr = pegs[pegs['priority'] == priority]
             toSelect = min(n-nSelected,len(curr))
-            selected.append(curr.sample(n=toSelect))
+            selected.append(curr.sample(n=toSelect, random_state=RandomState))
             nSelected = nSelected + toSelect
     return selected
 
@@ -134,6 +139,18 @@ def selectPegRNAs(pegs, variants, guidesPerVariant=1, minFractionClosest=0.5):
     return result
 
 
+def limitToRegions(pegs, regions):
+    ## Note:  Currently does not consider region names; allows a pegRNA to pass if it is completely contained in any of the regions
+    regionsRanges = [PrimeEditor.GenomicRange(row['chr'], row['start'], row['end']) for name,row in regions.iterrows()]
+
+    pegsIntersect = []
+    for curr in pegs:
+        pegsRanges = [PrimeEditor.getPegRNAFromPandas(row).getBounds() for name,row in curr.iterrows()]
+        containsBool = [ any([r.contains(p, considerStrand=False) for r in regionsRanges]) for p in pegsRanges ]
+        pegsIntersect.append(curr[np.array(containsBool).astype(bool)])
+
+    return pegsIntersect
+
 
 def main(args):
     variants = read_table(args.edits)
@@ -144,7 +161,12 @@ def main(args):
         currPegs['source'] = f
         pegs.append(currPegs)
 
-    ## Warn if the region names in 'variants' are different than the region names in 'pegs'
+    ## TODO: Warn if the region names in 'variants' are different than the region names in 'pegs'
+
+    if args.strictPegRegions is not None:
+        strictRegions = ReadUtils.read_bed(args.strictPegRegions)
+        pegs = limitToRegions(pegs, strictRegions)
+
 
     if args.spacerChoice == 'mixed':
         minFractionClosest = 0.5

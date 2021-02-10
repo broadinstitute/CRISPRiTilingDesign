@@ -31,12 +31,13 @@ def parseargs():
     parser.add_argument('--output', required=True, help="Variants file")
     parser.add_argument('--window', type=int, help="Window size to mutate")
     parser.add_argument('--offset', type=int, help="Sliding resolution")
-    parser.add_argument('--mutagenesis', default=False, help="Include mutagenesis of each subsequence")
+    parser.add_argument('--mutagenesis', action='store_true', default=False, help="Include mutagenesis of each subsequence")
     parser.add_argument('--randomBalanced', type=int, default=0, help="Include up to N variants that are random sequences (>=50%% GC content, with >=75%% bases different from original. Will select from list of up to N*3 shared sequences across all mutations, so the same replacements are frequently used")
-    parser.add_argument('--reverse', default=False, help="Include variant that is reverse of each subsequence")
-    parser.add_argument('--replaceWithN', default=False, help="For each window, include a pegRNA encode an N in the pegRNA rather than mutagenesis or reverse")
-    parser.add_argument('--includeRef', default=False, help="Include a variant to convert ref to ref nucleotide (no change)")
+    parser.add_argument('--reverse', action='store_true', default=False, help="Include variant that is reverse of each subsequence")
+    parser.add_argument('--replaceWithN', action='store_true', default=False, help="For each window, include a pegRNA encode an N in the pegRNA rather than mutagenesis or reverse")
+    parser.add_argument('--includeRef', action='store_true', default=False, help="Include a variant to convert ref to ref nucleotide (no change)")
     parser.add_argument('--substitute', type=str, default=None, help="Substitute the sequence for (each of) the following replacement sequence(s), comma-delimited")
+    parser.add_argument('--substituteN', type=int, default=None, help="Substitute the sequence with N substitution sequences (>=50%% GC content, with >=75%% bases different from original) randomly chosen for each variant as a subset of those listed in --substitute.  Default: use all sequences specified in 'substitute'")
     args = parser.parse_args()
     return(args)
 
@@ -57,6 +58,8 @@ def addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName):
 
 def getRandomBalancedSeq(seqLength, n=1, minGcPct=50):
     ## Dumb algorithm:  Create all possible sequences, then filter (will not scale well for large regions)
+    ## To do:  Filter out AA or TT dinucleotides which may synergize with sequences in pegRNA to halt Pol III transcription?
+
     if seqLength >= 10: 
         raise ValueError("randomBalanced algorithm will not scale well to scrambling sequences longer than 10 nucleotides")
 
@@ -100,6 +103,10 @@ def createVariants(chr, start, end, seqName, seq, window, offset, args):
     if (args.substitute is not None):
         substitutionSeqs = args.substitute.split(',')
 
+    if (args.substituteN is not None):
+        if args.substituteN < 1 or args.substituteN > len(substitutionSeqs):
+            raise ValueError("--substituteN must be >= 1 and <= length of list of sequences supplied by --substitution")
+
     currStart = start
     currEnd = start + window
     while currEnd <= end:
@@ -130,8 +137,13 @@ def createVariants(chr, start, end, seqName, seq, window, offset, args):
             edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
 
         if args.substitute is not None:
-            for newSeq in substitutionSeqs:
-                edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
+            if args.substituteN is not None:
+                currSeqs = selectBalancedSeqs(currSeq, substitutionSeqs, args.substituteN, minNewBasesPct=75)
+                for newSeq in currSeqs:
+                    edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
+            else:
+                for newSeq in substitutionSeqs:
+                    edits = addVariant(edits, chr, currStart, currEnd, currSeq, newSeq, seqName)
 
         if args.includeRef:
             newSeq = currSeq

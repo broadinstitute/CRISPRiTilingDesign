@@ -50,8 +50,11 @@ class PrimeEditor:
     def __str__(self):
         return "PrimeEditor: "+ str(self.getPegRNASequence())
         
-    def getPegRNASequence(self, scaffold=SCAFFOLD):
-        return self.spacerPlusG + scaffold + self.getExtensionSequence()
+    def getPegRNASequence(self, prependGifNecessary=True, scaffold=SCAFFOLD):
+        if prependGifNecessary is True:
+            return self.spacerPlusG + scaffold + self.getExtensionSequence()
+        else:
+            return self.spacer + scaffold + self.getExtensionSequence()
     
     def getExtensionSequence(self):
         return self.rtTemplate + self.primerBindingSite
@@ -154,6 +157,13 @@ class PrimeEditor:
             ("blockStarts", ",".join([str(i) for i in blockStarts]))
             ))))
 
+    def getBounds(self):
+        if self.guideRegion.strand == "-":
+            return GenomicRange(self.guideRegion.chromosome, self.rtTemplateRegion.start, self.guideRegion.end, self.guideRegion.strand)
+        else:
+            return GenomicRange(self.guideRegion.chromosome, self.guideRegion.start, self.rtTemplateRegion.end, self.guideRegion.strand)
+
+
 
 class GenomicRange:
     ## TODO:  Rewrite to extend pyranges
@@ -169,7 +179,9 @@ class GenomicRange:
             raise ValueError("Genomic Range: strand must be + - * or blank")
 
         if end < start:
-            raise ValueError("GenomicRange: end must be greater than start")
+            self.start = end
+            self.end = start
+            #raise ValueError("GenomicRange: end must be greater than start")
 
     def __str__(self):
         return self.chromosome + ":" + str(self.start) + "-" + str(self.end)
@@ -243,6 +255,11 @@ class GenomicRange:
         
         return distance
 
+    def contains(self, other, considerStrand=False):
+        if (self.chromosome == other.chromosome) and (self.start <= other.start) and (self.end >= other.end) and ( (not considerStrand) or (self.strand == other.strand) ):
+            return True
+        else:
+            return False
 
     def copy(self):
         return GenomicRange(self.chromosome, self.start, self.end, self.strand, self.name)

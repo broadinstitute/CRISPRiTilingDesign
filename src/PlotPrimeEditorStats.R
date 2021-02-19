@@ -80,8 +80,9 @@ p <- p + ggtitle(opt$figureLabel) + xlab("pegRNAs per variant position") + mythe
 print(p)
 
 ## Gaps per region
+## TO DO:  Debug why this fails sometimes; if statement is temporary fix
 regions <- table(pegs$variantName) %>% as.data.frame() %>% rename(variantName=Var1) %>% merge(variants %>% select(name,region), by.x="variantName", by.y="name", all.y=TRUE)
-if (length(unique(regions$Freq)) > 1) {
+if (length(unique(regions$Freq)) == 2) {   
   regions <- regions %>% mutate(Covered=factor(Freq, labels=c("No","Yes")))
   p <- regions %>% ggplot(aes(x=region, fill=Covered)) + geom_bar(position="stack", na.rm=T) 
   p <- p + ggtitle(opt$figureLabel) + xlab("Design regions") + mytheme + ylab("# variants")

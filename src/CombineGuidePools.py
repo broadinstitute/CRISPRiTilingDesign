@@ -65,6 +65,7 @@ Terminology: "subpool" refers to a set of oligos with the same PCR handles on th
 
 def addHandles(df, fwdPrimer, revPrimer):
     ''' Adds PCR handles for PCR1 '''
+
     try:
         if np.isnan(fwdPrimer):
             fwdPrimer = ''
@@ -102,11 +103,11 @@ def writeDesignFile(merged, outfile):
 def writePcrPrimers(merged, outfile):
     primerpairs = merged[['subpool','FwdPrimer','RevPrimer']].drop_duplicates()
     primers = pd.DataFrame( {
-        'PrimerName': "FWD-"+primerpairs['subpool'],
+        'PrimerName': [str(i) + "FWD-"+primerpairs['subpool'].iloc[i] for i in range(len(primerpairs))],
         'Sequence': primerpairs['FwdPrimer']
         })
     primers = primers.append(pd.DataFrame( {
-        'PrimerName': "REV-"+primerpairs['subpool'],
+        'PrimerName': [str(i) + "REV-"+primerpairs['subpool'].iloc[i] for i in range(len(primerpairs))],
         'Sequence': primerpairs['RevPrimer']
         }))
     primers.to_csv(outfile, sep='\t', header=True, index=False)
@@ -121,20 +122,20 @@ def writeSubpoolSummary(merged, outfile):
 
 
 def writeSequencesToOrder(oligos, outfile, poolMax, includeReverseComplements):
-
     if poolMax > 0 and len(oligos) > poolMax:
         print("Truncating oligo list from " + str(len(oligos)) + " to " + str(poolMax))
         towrite = oligos[0:poolMax]
 
     elif poolMax > 0 and len(oligos) < poolMax:
-        print("Adding copies of oligos (and reverse complements) to bring pool from " + str(len(oligos)) + " to " + str(poolMax))
+        print("Adding copies of oligos (and, if requested, reverse complements) to bring pool from " + str(len(oligos)) + " to " + str(poolMax))
         strand="-"
         towrite = oligos.copy()
         oligosRevComp = pd.Series([str(Seq(oligo).reverse_complement()) for key,oligo in oligos.iteritems()])
         while len(towrite) < poolMax:
             nToAdd = min(len(oligos), poolMax-len(towrite))
-            if strand == "-" and includeReverseComplements:
-                towrite = towrite.append(oligosRevComp[0:nToAdd])
+            if strand == "-":
+                if includeReverseComplements:
+                    towrite = towrite.append(oligosRevComp[0:nToAdd])
                 strand = "+"
             else:
                 towrite = towrite.append(oligos[0:nToAdd])
@@ -168,12 +169,13 @@ def main(args):
     
     ## Write final files
     writeDesignFile(merged, args.outbase + ".design.txt")
-    writePcrPrimers(merged, args.outbase + ".primers.txt") 
+    writePcrPrimers(merged, args.outbase + ".primersToOrder.txt") 
     writeSubpoolSummary(merged, args.outbase + '.subpools.txt')
     writeSequencesToOrder(oligos, args.outbase + ".SequencesToOrder.txt", args.fillToOligoPoolSize, args.includeReverseComplements)
 
-    print("Total unique oligos: ", len(oligos.drop_duplicates()))
-    print("Total oligos for order: ", len(oligos))
+    print("Total unique oligo sequences: ", len(oligos.drop_duplicates()))
+    print("Total oligos for order before duplication: ", len(oligos))
+    print("Range of oligo lengths: ", min([len(o) for o in oligos]), "-", max([len(o) for o in oligos]))
 
 if __name__ == '__main__':
     args = parseargs()

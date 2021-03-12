@@ -16,11 +16,22 @@ from collections import OrderedDict
 from JuicerCRISPRiDesign import *
 
 NICK_POSITION=-3
+SCAFFOLD     ="GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC"
+OPTI_SCAFFOLD="GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC"
 
 class PrimeEditor:
     ## TODO:  Change to extend pd.DataFrame or pd.Series
 
-    def __init__(self, spacer, primerBindingSite, rtTemplate, guideRegion=None, variantRegion=None, pbsRegion=None, rtTemplateRegion=None, scaffold="GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAACTTGAAAAAGTGGCACCGAGTCGGTGC"):
+    def __init__(
+        self, 
+        spacer, 
+        primerBindingSite, 
+        rtTemplate, 
+        guideRegion=None, 
+        variantRegion=None, 
+        pbsRegion=None, 
+        rtTemplateRegion=None,
+        name=""):
         '''
         spacer, primerBindingSite, rtTemplate are strings representing sequence in pegRNA.
         Regions are in genomic coordinates
@@ -32,14 +43,18 @@ class PrimeEditor:
         self.spacer = str(spacer)
         self.primerBindingSite = str(primerBindingSite)
         self.rtTemplate = str(rtTemplate)
-        self.scaffold = str(scaffold)
+        #self.scaffold = str(scaffold)
         self.spacerPlusG = prependGifNecessary(self.spacer)
+        self.name = name
 
     def __str__(self):
         return "PrimeEditor: "+ str(self.getPegRNASequence())
         
-    def getPegRNASequence(self):
-        return self.spacerPlusG + self.scaffold + self.getExtensionSequence()
+    def getPegRNASequence(self, prependGifNecessary=True, scaffold=SCAFFOLD):
+        if prependGifNecessary is True:
+            return self.spacerPlusG + scaffold + self.getExtensionSequence()
+        else:
+            return self.spacer + scaffold + self.getExtensionSequence()
     
     def getExtensionSequence(self):
         return self.rtTemplate + self.primerBindingSite
@@ -93,7 +108,14 @@ class PrimeEditor:
             ("ExtensionOligoTop", "GTGC" + self.getExtensionSequence()),
             ("ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement())),
             ("GibsonOligoTop", "aaaggacgaaacacc" + self.spacerPlusG + "GTTTTAGAGCTAGAAATAGCAAGTTAAAATAAGGCTAGTCCGTTATCAAC"),
-            ("GibsonOligoBot", "gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT")
+            ("GibsonOligoBot", str("gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT")),
+            ("sgOpti.pegRNASequence" , self.getPegRNASequence(scaffold=OPTI_SCAFFOLD)),
+            ("sgOpti.SpacerOligoTop", "CACC" + self.spacerPlusG + "GTTTA"),
+            ("sgOpti.SpacerOligoBot", str("CTCTTAAAC" + Seq(self.spacerPlusG).reverse_complement())),
+            ("sgOpti.ExtensionOligoTop", "GTGC" + self.getExtensionSequence()),
+            ("sgOpti.ExtensionOligoBot", str("AAAA" + Seq(self.getExtensionSequence()).reverse_complement())),
+            ("sgOpti.GibsonOligoTop", "aaaggacgaaacacc" + self.spacerPlusG + "GTTTAAGAGCTATGCTGGAAACAGCATAGCAAGTTTAAATAAGGCTAGTCCGTTATCAAC"),
+            ("sgOpti.GibsonOligoBot", str("gcggcccaagcttaaaaaaa" + Seq(self.getExtensionSequence()).reverse_complement() + "GCACCGACTCGGTGCCACTTTTTCAAGTTGATAACGGACTAGCCT"))
             )))
 
     def getPositionRelativeToNick(self):
@@ -113,6 +135,35 @@ class PrimeEditor:
         else:
             return distance
 
+    def toBED(self):
+        if (self.guideRegion.strand == "+"):
+            blockSizes = [self.guideRegion.length()-3, self.rtTemplateRegion.end-self.variantRegion.start]
+            blockStarts = [0,self.variantRegion.start-self.guideRegion.start]
+        else:
+            blockSizes = [self.variantRegion.end-self.rtTemplateRegion.start, self.guideRegion.length()-3]
+            blockStarts = [0,self.guideRegion.start+3-self.rtTemplateRegion.start]
+        return(pd.Series( OrderedDict((
+            ("chr", self.guideRegion.chromosome),
+            ("start", min([self.guideRegion.start,self.rtTemplateRegion.start])),
+            ("end", max([self.guideRegion.end,self.rtTemplateRegion.end])),
+            ("name", self.name),
+            ("score", 0),
+            ("strand", self.guideRegion.strand),
+            ("thickStart", self.variantRegion.start),
+            ("thickEnd", self.variantRegion.end),
+            ("itemRgb", "0,0,0"),
+            ("blockCount", 2),
+            ("blockSizes", ",".join([str(i) for i in blockSizes])),
+            ("blockStarts", ",".join([str(i) for i in blockStarts]))
+            ))))
+
+    def getBounds(self):
+        if self.guideRegion.strand == "-":
+            return GenomicRange(self.guideRegion.chromosome, self.rtTemplateRegion.start, self.guideRegion.end, self.guideRegion.strand)
+        else:
+            return GenomicRange(self.guideRegion.chromosome, self.guideRegion.start, self.rtTemplateRegion.end, self.guideRegion.strand)
+
+
 
 class GenomicRange:
     ## TODO:  Rewrite to extend pyranges
@@ -128,7 +179,9 @@ class GenomicRange:
             raise ValueError("Genomic Range: strand must be + - * or blank")
 
         if end < start:
-            raise ValueError("GenomicRange: end must be greater than start")
+            self.start = end
+            self.end = start
+            #raise ValueError("GenomicRange: end must be greater than start")
 
     def __str__(self):
         return self.chromosome + ":" + str(self.start) + "-" + str(self.end)
@@ -160,7 +213,7 @@ class GenomicRange:
             return self.end
 
     def get5pEnd(self):
-        if self.strand == "_":
+        if self.strand == "-":
             return self.end
         else:
             return self.start
@@ -202,6 +255,11 @@ class GenomicRange:
         
         return distance
 
+    def contains(self, other, considerStrand=False):
+        if (self.chromosome == other.chromosome) and (self.start <= other.start) and (self.end >= other.end) and ( (not considerStrand) or (self.strand == other.strand) ):
+            return True
+        else:
+            return False
 
     def copy(self):
         return GenomicRange(self.chromosome, self.start, self.end, self.strand, self.name)
@@ -250,6 +308,9 @@ def getPegRNA(chromosome, seqStart, seqEnd, seq, guideStart, guideEnd, guideStra
     sequence = Seq(seq)
 
     guide = GenomicRange(chromosome, guideStart, guideEnd, guideStrand)
+    
+    if (guideStart < seqStart) or (guideEnd > seqEnd):
+        raise ValueError("Guide bounds are outside sequence bounds")
 
     guideSeq = (FeatureLocation(guide.start, guide.end, strand=featureStrand)+(-seqStart)).extract(sequence)
     if guideSeq == Seq(''):
@@ -293,6 +354,18 @@ def getPegRNA(chromosome, seqStart, seqEnd, seq, guideStart, guideEnd, guideStra
     return PrimeEditor(results['guideSeq'], results['pbsSeq'], results['rtSeq'], guide, variant, pbs, rtTemplate)
 
 
+def getPegRNAFromPandas(row):
+    return PrimeEditor(
+        spacer=row['spacer'],
+        primerBindingSite=row['primerBindingSite'], 
+        rtTemplate=row['rtTemplate'], 
+        guideRegion=GenomicRange(row['chr'],int(row['guideStart']),int(row['guideEnd']),row['guideStrand']), 
+        variantRegion=GenomicRange(row['chr'],int(row['variantStart']),int(row['variantEnd']),row['guideStrand']), 
+        pbsRegion=GenomicRange(row['chr'],int(row['pbsStart']),int(row['pbsEnd']),row['guideStrand']),
+        rtTemplateRegion=GenomicRange(row['chr'],int(row['rtTemplateStart']),int(row['rtTemplateEnd']),row['guideStrand'])
+        )
+
+
 def getAllPegRNAs(
     chromosome, 
     seqStart, 
@@ -310,17 +383,21 @@ def getAllPegRNAs(
     maxRTPastEdit,
     maxRTTemplateLength):
     
-    results = pd.DataFrame()
+    results = []
     for pbsLength in range(minPbsLength, maxPbsLength+1):
         for rtLengthPastEdit in range(minRTPastEdit, maxRTPastEdit+1):
             try:
                 pegRNA = getPegRNA(chromosome, seqStart, seqEnd, seq, guideStart, guideEnd, guideStrand, variantStart, variantEnd, replacementSeq, pbsLength, rtLengthPastEdit)
                 if len(pegRNA.rtTemplate) <= maxRTTemplateLength:
                     curr = pegRNA.toPandas()
-                    results = results.append(curr, ignore_index=True)[curr.index.tolist()]
+                    results.append(curr)
             except ValueError:
                 continue
-    return results
+
+    if (len(results) > 0):
+        return pd.concat(results, axis=1).transpose()
+    else:
+        return pd.DataFrame()
 
 
 def reverseStrand(strand):
@@ -336,6 +413,7 @@ def getNickingGuides(guides, chromosome, seqStart, seqEnd, seq, guideStart, guid
     guide = GenomicRange(chromosome, guideStart, guideEnd, guideStrand)
     editnick = guide.three_prime().shift(NICK_POSITION, considerStrand=True)
 
+    ## To do: Speed up code by replacing pd.DataFrame().append() with pd.concat()
     results = pd.DataFrame()
     
     if maxPE3NickDistance > 0:

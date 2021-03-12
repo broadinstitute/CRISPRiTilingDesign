@@ -65,10 +65,13 @@ Terminology: "subpool" refers to a set of oligos with the same PCR handles on th
 
 def addHandles(df, fwdPrimer, revPrimer):
     ''' Adds PCR handles for PCR1 '''
-    if np.isnan(fwdPrimer):
-        fwdPrimer = ''
-    if np.isnan(revPrimer):
-        revPrimer = ''
+    try:
+        if np.isnan(fwdPrimer):
+            fwdPrimer = ''
+        if np.isnan(revPrimer):
+            revPrimer = ''
+    except:
+        next
 
     df["FwdPrimer"] = fwdPrimer
     df["RevPrimer"] = revPrimer
@@ -111,8 +114,9 @@ def writePcrPrimers(merged, outfile):
 
 def writeSubpoolSummary(merged, outfile):
     summ = merged.copy()
-    summ['nGuides'] = summ.groupby('subpool')['subpool'].transform('count')
-    summ = summ[['subpool','FwdPrimer','RevPrimer','nGuides']].drop_duplicates()
+    summ['nEntries'] = summ.groupby('subpool')['subpool'].transform('count')
+    summ['nUniqueGuides'] = summ.groupby('subpool')['OligoSequence'].transform('nunique')
+    summ = summ[['subpool','FwdPrimer','RevPrimer','nEntries', 'nUniqueGuides']].drop_duplicates()
     summ.to_csv(outfile, sep='\t', header=True, index=False)
 
 
@@ -132,7 +136,7 @@ def writeSequencesToOrder(oligos, outfile, poolMax, includeReverseComplements):
             if strand == "-" and includeReverseComplements:
                 towrite = towrite.append(oligosRevComp[0:nToAdd])
                 strand = "+"
-            elif strand == "+":
+            else:
                 towrite = towrite.append(oligos[0:nToAdd])
                 strand = "-"
 

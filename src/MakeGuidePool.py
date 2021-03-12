@@ -152,7 +152,7 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
 
             if (len(tSet)<trimElements) and (len(toAdd) == 0):
                 ## Skip elements with too few guides and where we weren't try to force include the guides
-                print("Skipping " + i + " because there are too few guides")
+                print("Skipping " + str(i) + " because there are too few guides")
                 continue
 
             # If guide has been already chosen for a different (overlapping) element, pre-select these guides
@@ -248,7 +248,7 @@ def getNegativeControlGuides(negCtrlList, nCtrls, reSites, vectorDesigns, vector
     negCtrls = excludeRestrictionSites(negCtrls, reSites)
 
     if (nCtrls > len(negCtrls)):
-        raise ValueError("Asking for more negative controls than are provided in the negCtrlList")
+        raise ValueError("Asking for more negative controls (" + str(nCtrls) + ") than are provided in the negCtrlList (" + str(len(negCtrls)) + ")")
     negCtrls = negCtrls.head(nCtrls)
     return negCtrls
 

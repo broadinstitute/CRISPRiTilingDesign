@@ -29,11 +29,23 @@ from JuicerCRISPRiDesign import *
 
 
 
-def parseargs(required_args=True):
+def parseargs():
     class formatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
         pass
 
     epilog = ('''
+Input config file:
+subpool                 Name of the subpool of gRNAs with unique primer handles to amplify 
+pool                    Arbitrary name of a set of gRNAs to include
+DesignFile              Path to design file for this pool (e.g., the *.design.txt file output by MakeGuidePool.py).  
+Multiply                Integer, default to 1. Use this column to balance the subpools by printing 
+                          the same sequences multiple times (so that all of the subpools are at 
+                          approximately the same abundance and require the same number of PCR cycles to amplify.)
+                          e.g. Multiply=2 will print all sequences for this subpool twice relative to subpools where Multiply=1
+FwdPrimer               Primer 1 for amplifying the subpool (order this sequence).  Leave blank if no subpool handles are required.
+RevPrimer               Primer 2 for amplifying the subpool (order this sequence).  Leave blank if no subpool handles are required.
+
+
 Key columns in output file:
 GuideSequenceMinusG     Sequence of the gRNA minus leading G - this should be completed by all guides, including negative controls
 CoreOligo               Sequence of gRNA + flanking promoter + scaffold sequences
@@ -45,18 +57,20 @@ guideSet                Gene / enhancer / target of this gRNA
 
 Current behavior is, if design file has identical oligo sequences, to collapse these before re-duplicating to fill the space.
 ''')
+
     parser = argparse.ArgumentParser(description='''
-Combine different oligo subpools output by MakeGuidePool.py into a final pool for ordering.  
-Terminology: "subpool" refers to a set of oligos with the same PCR handles on the outside .. i.e. a set of oligos that will be amplified together.
+Combine different oligo subpools output by MakeGuidePool.py into a final oligo pool for ordering. 
+Terminology: "subpool" refers to a set of oligos with the same PCR handles on the outside, i.e. a set of oligos that will be amplified together
+Before running, set up a config file (e.g. called CombinePoolsConfig.txt) that lists the paths to each subpool, and the unique primers to use
 ''',
                                      epilog=epilog,
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
     
-    parser.add_argument('--config', required=required_args, help="Config file with columns: poolgroup pool DesignFile Multiply FwdPrimer RevPrimer")
-    parser.add_argument('--outbase', required=required_args)
+    parser.add_argument('--config', required=True, help="Config file with columns: subpool pool DesignFile Multiply FwdPrimer RevPrimer")
+    parser.add_argument('--outbase', required=True)
     parser.add_argument('--fillToOligoPoolSize', default=-1, type=int, help="Total size of oligo pool; if total number of guides is less than this number, will output oligo order file with this total number of gRNAs.  If total guides is more than this number, will truncate.")
-    parser.add_argument('--includeReverseComplements', default=False, action='store_true', help="Include this flag to adding reverse complement oligos. Probably a bad idea if this array includes tiling sequences (or HyPR barcodes)")
+    parser.add_argument('--includeReverseComplements', default=False, action='store_true', help="Include this flag to adding reverse complement oligos (e.g., as a hedge against strand-specific errors in synthesis). Syggest skipping this if this array includes tiling sequences (or HyPR barcodes)")
 
     args = parser.parse_args()
     return(args)
@@ -147,6 +161,16 @@ def writeSequencesToOrder(oligos, outfile, poolMax, includeReverseComplements):
     towrite.to_csv(outfile, header=False, index=False)
 
 
+def writeFasta(oligos, outfile):
+    towrite = oligos[['name','MappingSequence']].sort_values(by='name').drop_duplicates()
+    f = open(outfile, 'w')
+    for index, row in oligos.iterrows():
+        f.write(">" + row['name'] + "\n")
+        f.write(row['MappingSequence'] + "\n")
+    f.close()
+
+
+
 def main(args):
     config = read_table(args.config)
 
@@ -172,6 +196,7 @@ def main(args):
     writePcrPrimers(merged, args.outbase + ".primersToOrder.txt") 
     writeSubpoolSummary(merged, args.outbase + '.subpools.txt')
     writeSequencesToOrder(oligos, args.outbase + ".SequencesToOrder.txt", args.fillToOligoPoolSize, args.includeReverseComplements)
+    writeFasta(merged, args.outbase + ".fa")
 
     print("Total unique oligo sequences: ", len(oligos.drop_duplicates()))
     print("Total oligos for order before duplication: ", len(oligos))

@@ -33,19 +33,19 @@ def parseargs(required_args=True):
         pass
 
     epilog = ("")
-    parser = argparse.ArgumentParser(description='Create oligos for a CRISPRi pool or subpool. This is based on Charlie\'s design script',
+    parser = argparse.ArgumentParser(description='Select gRNAs in regions, add PCR handles for cloning, and create sequences for oligo pool synthesis.',
                                      epilog=epilog,
                                      formatter_class=formatter)
     readable = argparse.FileType('r')
     
     parser.add_argument('--input', required=required_args, help="preDesign.bed file from GetTileGuides.py")
     parser.add_argument('--outdir', required=required_args)
-    parser.add_argument('--nGuidesPerElement', required=required_args, type=int,    help="Number of guides to choose per element (in the guideSet column). Set to 0 to select all.")
+    parser.add_argument('--nGuidesPerElement', required=required_args, type=int, help="Number of guides to choose per element (in the guideSet column). Set to 0 to select all.")
     parser.add_argument('--negCtrlList', default="data/Weissman1000.negative_control.20bp.design.txt", help="Formatted guide file of negative controls.")
     parser.add_argument('--nCtrls', default=0, type=int, help="Number of negative control gRNAs to include")
     parser.add_argument('--safeCtrlList', default="data/Tycko2019SafeTargeting.txt", help="Formatted guide file for safe-targeting controls.")
     parser.add_argument('--nSafeCtrls', default=0, type=int, help="Number of safe-targeting gRNAs to include")
-    parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Master file with gibson arm sequences for various plasmid designs")
+    parser.add_argument('--vectorDesigns', default="data/CloningDesigns.txt", help="Reference table with gibson arm sequences for various plasmid designs")
     parser.add_argument('--vector', default='sgOpti', help="Name of vector to index into vectorDesigns")
     parser.add_argument('--PoolID', default="MyPool", help="Unique name of pool or subpool for naming oligos - e.g. 191110_GATA1")
     parser.add_argument('--seqCol', default='GuideSequenceWithPAM', help="Name of column with guide sequence")

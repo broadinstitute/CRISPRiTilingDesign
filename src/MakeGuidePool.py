@@ -136,6 +136,12 @@ def selectNguidesPerElement(df, NGuides, columnName="peakName", minGuides=0, met
     chosen=df.head(0)
     minGuidesInAnElement=len(df)
 
+    # Force the inclusion of certain guides, regardless of any other considerations
+    if includeGuides is not None:
+        toAdd = pd.merge(df, includeGuides)
+        chosen=pd.concat([chosen, toAdd])
+        print("Forcing inclusion of " + str(len(toAdd)) + " gRNAs (out of " + str(len(includeGuides)) + " in the --forceGuides file)")
+
     for i in sorted(set(df[columnName]), reverse=True):
         tSet=df[df[columnName]==i]
         tSet=tSet.sort_values(by='start')

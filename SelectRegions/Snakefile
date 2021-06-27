@@ -1,0 +1,106 @@
+# Snakemake workflow to select regions for CRISPRi tiling for Engreitz Lab based on input files from ABC pipeline
+# Overall logic:
+#    Input a list of genes and list of ABC cell types
+#    Define 'loci' as the gene promoters +/- specified distance in either direction (e.g. 1 Mb)
+#    Include 500bp promoter regions from the input promoter file
+#    Include 300bp regions centered on all DNase peak summits from the ABC candidate regions in each of the cell types
+#    Cat all regions together into single output file (overlapping regions are not merged)
+
+
+import pandas as pd
+
+# Variables to define on command line
+abcParams = pd.read_table(config['abcParams'])
+celltypes = config['cellTypes'].split(',')
+distance = config['distance']
+genes = config['genes']
+promoters = config['promoters']
+sizes = config['sizes']
+
+
+def workflow_outputs(wildcards):
+  files = []
+  files.append("ChosenGenes.AllRegions.bed")
+  return files
+
+rule all:
+    input: workflow_outputs
+
+
+rule write_genes:
+  output:
+    gene_list='ChosenGenes.txt'
+  shell:
+    """
+    echo {genes} | tr ',' '\n' > {output.gene_list}
+    """
+
+rule get_promoter_regions:
+  ## Get the 500-bp promoter regions for each gene symbol
+  input:
+    gene_list='ChosenGenes.txt'
+  output:
+    promoter_regions='ChosenGenes.Promoters.bed'
+  run:
+    prom = pd.read_table(promoters, names=['chr','start','end','symbol','score','strand'])
+    genes = pd.read_table(input.gene_list, names=['symbol'])
+    selected = prom.merge(genes)
+    selected['symbol'] = [symbol + "_TSS" for symbol in selected['symbol'].values]
+    selected.to_csv(output.promoter_regions, sep='\t', header=False, index=False)
+
+
+rule get_gene_loci:
+  ## Create a ChosenGenes.Loci.bed by selecting 1 Mb on either side of the chosen genes
+  input:
+    promoter_regions='ChosenGenes.Promoters.bed'
+  output:
+    gene_loci='ChosenGenes.Loci.bed'
+  shell:
+    """
+    cat {input.promoter_regions} | bedtools slop -i stdin -b {distance} -g {sizes} > {output.gene_loci}
+    """
+
+def get_celltype_summits_inputs(wildcards):
+  if not wildcards.cellType in abcParams['MergedCellType'].values:
+    raise ValueError("Cell type '" + wildcards.cellType + "' not found in the 'MergedCellType' column of the ABC params file '" + config['abcParams'] + "'")
+  nhbdDir = abcParams.loc[(abcParams['MergedCellType'] == wildcards.cellType)]['Neighborhoods']
+  summits = nhbdDir + "/../Peaks/macs2_summits.bed"
+  enhancerList = nhbdDir + "/EnhancerList.bed"
+  return {
+    'gene_loci':'ChosenGenes.Loci.bed',
+    'summits':summits,
+    'enhancers':enhancerList
+  }
+
+
+rule get_celltype_summits:
+  ## Grab 300bp regions centered on DNase peak summits from the ABC candidate regions in each of the cell types
+  input: unpack(get_celltype_summits_inputs)
+  output:
+    summits='ChosenGenes.{cellType}.summits.bed'
+  shell:
+    """
+    cat {input.summits} | bedtools intersect -u -a stdin -b {input.gene_loci} | \
+    bedtools intersect -a stdin -b {input.enhancers} | \
+    bedtools slop -b 150 -i stdin -g {sizes} | \
+    bedtools sort -i stdin -faidx {sizes} | \
+    cut -f 1-3 | \
+    awk -v celltype={wildcards.cellType} '{{ print $1 "\t" $2 "\t" $3 "\t" celltype "|" $1 ":" $2 "-" $3 }}' > {output.summits}
+    """
+
+
+rule combine_all_regions:
+  ## Add in full 500-bp promoter regions, not just 300-bp regions around summits, and combine multiple cell types into one file
+  input: 
+    expand("ChosenGenes.{cellType}.summits.bed", cellType=celltypes)
+  output:
+    regions='ChosenGenes.AllRegions.bed'
+  shell:
+    """
+  cat {promoters} {input} | \
+  cut -f 1-4 | bedtools sort -i stdin -faidx {sizes} > \
+  {output.regions}
+    """
+
+
+

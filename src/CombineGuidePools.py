@@ -162,9 +162,9 @@ def writeSequencesToOrder(oligos, outfile, poolMax, includeReverseComplements):
 
 
 def writeFasta(oligos, outfile):
-    towrite = oligos[['name','MappingSequence']].sort_values(by='name').drop_duplicates()
+    towrite = oligos[['name','MappingSequence']].sort_values(by='name').drop_duplicates(ignore_index=True)
     f = open(outfile, 'w')
-    for index, row in oligos.iterrows():
+    for index, row in towrite.iterrows():
         f.write(">" + row['name'] + "\n")
         f.write(row['MappingSequence'] + "\n")
     f.close()

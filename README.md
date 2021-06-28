@@ -27,6 +27,10 @@ Depends on CRISPR design code repository using the MIT specificity score, locate
 
 [Clone](https://help.github.com/en/articles/cloning-a-repository) this to your local system, into the place where you want to perform the data analysis.
 
+Example:
+
+	git clone git@github.com:broadinstitute/CRISPRiTilingDesign.git
+
 ### Step 2: Install conda environment if needed
 
 Install Snakemake and conda environment using [conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html):
@@ -51,6 +55,7 @@ Do this according to the needs of your experiment. The end result should be BED4
 
 For CRISPRi-FlowFISH experiments, you can use the provided Snakemake workflow to select DNase peaks from specific cell types around specified genes:
 
+	PROMOTERS=$GROUP_HOME/Software/ABC-Enhancer-Gene-Prediction/reference/RefSeqCurated.170308.bed.CollapsedGeneBounds.TSS500bp.bed
 	ABCLIST=/oak/stanford/groups/engreitz/Projects/ABC/191216_ABC/config/210221.ABCCellTypeTable.ABCPaperV3.LocusPlots.txt
 	CELLTYPES="K562,HCT116,GM12878"  ## Matching MergedCellType column of $ABCLIST
 	RANGE=1000000  ## Distance on either side of gene to include DNase peaks
@@ -60,6 +65,12 @@ For CRISPRi-FlowFISH experiments, you can use the provided Snakemake workflow to
 	  --directory 01_ChooseRegions/ \
 	  --config abcParams=$ABCLIST cellTypes=$CELLTYPES distance=$RANGE genes=$GENES promoters=$PROMOTERS sizes=$SIZES \
 	  -n 
+
+For CRISPRi screens targeting promoters, you can do something simpler, like grabbing the regions from our ABC promoter region files:
+
+	cat $PROMOTERS | csvtk grep -H -t -f 4 -P 01_ChooseRegions/ChosenGenes.txt > 01_ChooseRegions/ChosenGenes.Promoters.txt
+	#Output:
+	#chrX    48644731        48645231        GATA1   0       +
 
 ### Step 2: Design and score gRNAs
 
@@ -164,11 +175,11 @@ Documentation:
 	usage: CombineGuidePools.py [-h] --config CONFIG --outbase OUTBASE
 	                            [--fillToOligoPoolSize FILLTOOLIGOPOOLSIZE]
 	                            [--includeReverseComplements]
-	                            
+
 	Combine different oligo subpools output by MakeGuidePool.py into a final oligo pool for ordering. 
 	Terminology: "subpool" refers to a set of oligos with the same PCR handles on the outside, i.e. a set of oligos that will be amplified together
 	Before running, set up a config file (e.g. called CombinePoolsConfig.txt) that lists the paths to each subpool, and the unique primers to use
-	
+
 	optional arguments:
 	  -h, --help            show this help message and exit
 	  --config CONFIG       Config file with columns: subpool pool DesignFile Multiply FwdPrimer RevPrimer (default: None)
@@ -177,7 +188,7 @@ Documentation:
 	                        Total size of oligo pool; if total number of guides is less than this number, will output oligo order file with this total number of gRNAs.  If total guides is more than this number, will truncate. (default: -1)
 	  --includeReverseComplements
 	                        Include this flag to adding reverse complement oligos (e.g., as a hedge against strand-specific errors in synthesis). Syggest skipping this if this array includes tiling sequences (or HyPR barcodes) (default: False)
-	                        
+
 	Input config file:
 	subpool                 Name of the subpool of gRNAs with unique primer handles to amplify 
 	pool                    Arbitrary name of a set of gRNAs to include
@@ -188,7 +199,7 @@ Documentation:
 	                          e.g. Multiply=2 will print all sequences for this subpool twice relative to subpools where Multiply=1
 	FwdPrimer               Primer 1 for amplifying the subpool (order this sequence).  Leave blank if no subpool handles are required.
 	RevPrimer               Primer 2 for amplifying the subpool (order this sequence).  Leave blank if no subpool handles are required.
-	
+
 	Key columns in output file:
 	GuideSequenceMinusG     Sequence of the gRNA minus leading G - this should be completed by all guides, including negative controls
 	CoreOligo               Sequence of gRNA + flanking promoter + scaffold sequences
@@ -197,7 +208,7 @@ Documentation:
 	FwdPrimer               Primer 1 for amplifying the subpool (order this sequence)
 	RevPrimer               Primer 2 for amplifying the subpool (order this sequence)
 	guideSet                Gene / enhancer / target of this gRNA
-	
+
 	Current behavior is, if design file has identical oligo sequences, to collapse these before re-duplicating to fill the space.
 
 

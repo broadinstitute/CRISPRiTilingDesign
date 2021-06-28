@@ -42,7 +42,7 @@ GENES="GATA1"  ## comma-delimited
 ## This lightweight snakemake pipeline implements the bash code below for making CRISPRi tiling screens:
 snakemake \
   -s CRISPRiTilingDesign/SelectRegions/Snakefile \
-  --directory test/ \
+  --directory 01_ChooseRegions/ \
   --config abcParams=$ABCLIST cellTypes=$CELLTYPES distance=$RANGE genes=$GENES promoters=$PROMOTERS sizes=$SIZES \
   -n 
 

@@ -1,0 +1,16 @@
+
+
+FILELIST=DHSFiles.txt
+GENES=FCGR2A.bed
+PREFIX=DHSPeaks
+MINSIZE=500
+RADIUS=10000
+
+GENENAMES=$(basename $GENES .bed)
+
+#./CollapsePeaks.sh $FILELIST DHSPeaks 500 $MINSIZE
+
+PEAKS=$PREFIX.merged.min$MINSIZE.bed
+./FindNearPeaks.sh $GENES $PEAKS $RADIUS $PREFIX.$GENENAMES.rad$RADIUS.min$MINSIZE.bed
+
+./PickGuides.sh $PREFIX.$GENENAMES.rad$RADIUS.min$MINSIZE.bed .

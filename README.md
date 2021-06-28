@@ -16,8 +16,8 @@ The major steps in the design process are:
 4. Choosing gRNAs within each region, e.g. by even selection across the region.  
 5. Collating different sets of gRNAs ("subpools") into a single oligo "pool" for ordering
 
-The repository also includes helper scripts for designing dead gRNAs, selecting protein-coding 
-gRNAs from Brie/Brunello, and annotating gRNAs from previous designers
+The repository also includes helper scripts for designing dead gRNAs, prime editing gRNAs,
+selecting protein-coding gRNAs from Brie/Brunello, and annotating gRNAs from previous designers. 
 
 Depends on CRISPR design code repository using the MIT specificity score, located [here](https://github.com/EngreitzLab/CRISPRDesigner/tree/master).
 
@@ -38,8 +38,11 @@ For installation details, see the [instructions in the Snakemake documentation](
 Engreitz Lab members working on Sherlock can skip this step.
 
 
-## Usage
+## Usage (CRISPRi)
 
 A full example workflow for designing CRISPRi guides tiling across all DNase peaks around GATA1 is provided in `example/log.sh`
 
 ### Step 1: Select regions in which to design gRNAs
+
+
+## Usage (Prime editing)

@@ -214,4 +214,17 @@ Documentation:
 
 ## Usage (Prime editing)
 
-To do.
+A full example workflow for designing pegRNAs guides for a few control sites: `example/log.pegRNAsGATA1.sh`
+
+### Step 1. Set up a table listing desired variants
+
+Example:
+
+	chr     start   end     name    ref     alt     region
+	chr10   81107192        81107197        chr10:81107193: CCAAT>AGCCA     CCAAT   AGCCA   PPIF_CCAAT_box
+
+Notes:
+- This file must follow BED file format conventions: coordinates are zero-based for the coordinate start and one-based for the coordinate end.  So, the first 3 bases of chromosome 1 is `chr1	0	3`.
+- The reference sequence listed in the 'ref' column must match the reference genome sequence provided (to check against coordinate position errors, e.g. see previous point).  
+
+

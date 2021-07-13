@@ -170,6 +170,8 @@ Then, run:
 	    --outbase $PROJECT/04_CombinePools/210615_GATA1CRISPRiTiling  \
 	    > $PROJECT/04_CombinePools/210615_GATA1CRISPRiTiling.out 
 
+If you do not have multiple subpools that need specific subpool primers, leave those columns in the CombinePoolsConfig.txt file blank.
+
 Documentation:
 
 	usage: CombineGuidePools.py [-h] --config CONFIG --outbase OUTBASE

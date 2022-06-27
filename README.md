@@ -54,7 +54,7 @@ The first step is to generate a BED file containing the regions in which we want
 
 Do this according to the needs of your experiment. The end result should be BED4 file with `chr	start	end	name`.
 
-For CRISPRi-FlowFISH experiments, you can use the provided Snakemake workflow to select DNase peaks from specific cell types around specified genes (this excerpt points to files on Engreitz Lab cluster; for others, the relevant files are included in the `data/` and `example/` directories of this repository:
+For CRISPRi-FlowFISH experiments, you can use the provided Snakemake workflow to select DNase peaks from specific cell types around specified genes (this excerpt points to files on Engreitz Lab cluster; for others, the relevant files are included in the `data/` and `example/` directories of this repository):
 
 	PROMOTERS=$GROUP_HOME/Software/ABC-Enhancer-Gene-Prediction/reference/RefSeqCurated.170308.bed.CollapsedGeneBounds.TSS500bp.bed
 	ABCLIST=/oak/stanford/groups/engreitz/Projects/ABC/191216_ABC/config/210221.ABCCellTypeTable.ABCPaperV3.LocusPlots.txt
@@ -77,14 +77,14 @@ For CRISPRi screens targeting promoters, you can do something simpler, like grab
 
 The second step involves sending the chosen regions to a CRISPR design tool, which will enumerate all NGG PAM sites and apply a specificity score filter.
 
-To do so, first clone the CRISPRDesigner repository:
+To do so, first clone the [CRISPRDesigner repository](https://github.com/EngreitzLab/CRISPRDesigner/tree/master):
 
 	git clone git@github.com:EngreitzLab/CRISPRDesigner.git
 	cd CRISPRDesigner/
 	mkdir logs
 
 Set up snakemake pipeline by editing CRISPRDesigner/config/config.yaml to point to your region file.  
-Optionally, provide a list of pre-scored gRNAs to speed the design process.
+Optionally, provide a list of pre-scored gRNAs to speed the design process (see [here](https://github.com/EngreitzLab/CRISPRDesigner/tree/master/resources)).
 
 Then, run the CRISPRDesigner snakemake pipeline:
 
@@ -162,7 +162,7 @@ Documentation:
 
 ### Step 4: Combine multiple guide pools, add PCR handles, and output files to order oligo pools
 
-First, set up a config file that lists paths to all of the guide subpools to process (and if desired, combine).
+First, set up a config file (see `example/CombinePoolsConfig.txt`) that lists paths to all of the guide subpools to process (and if desired, combine).
 
 Then, run:
 
@@ -181,7 +181,7 @@ Documentation:
 
 	Combine different oligo subpools output by MakeGuidePool.py into a final oligo pool for ordering. 
 	Terminology: "subpool" refers to a set of oligos with the same PCR handles on the outside, i.e. a set of oligos that will be amplified together
-	Before running, set up a config file (e.g. called CombinePoolsConfig.txt) that lists the paths to each subpool, and the unique primers to use
+	Before running, set up a config file (e.g. called CombinePoolsConfig.txt) that lists the paths to each subpool, and the unique primers to use. 
 
 	optional arguments:
 	  -h, --help            show this help message and exit
@@ -190,7 +190,7 @@ Documentation:
 	  --fillToOligoPoolSize FILLTOOLIGOPOOLSIZE
 	                        Total size of oligo pool; if total number of guides is less than this number, will output oligo order file with this total number of gRNAs.  If total guides is more than this number, will truncate. (default: -1)
 	  --includeReverseComplements
-	                        Include this flag to adding reverse complement oligos (e.g., as a hedge against strand-specific errors in synthesis). Syggest skipping this if this array includes tiling sequences (or HyPR barcodes) (default: False)
+	                        Include this flag to adding reverse complement oligos (e.g., as a hedge against strand-specific errors in synthesis). Suggest skipping this if this array includes tiling sequences (or HyPR barcodes) (default: False)
 
 	Input config file:
 	subpool                 Name of the subpool of gRNAs with unique primer handles to amplify 

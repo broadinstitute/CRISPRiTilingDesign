@@ -77,7 +77,7 @@ For CRISPRi screens targeting promoters, you can do something simpler, like grab
 
 The second step involves sending the chosen regions to a CRISPR design tool, which will enumerate all NGG PAM sites and apply a specificity score filter.
 
-To do so, first clone the [CRISPRDesigner repository](https://github.com/EngreitzLab/CRISPRDesigner/tree/master):
+To do so, first clone the [CRISPRDesigner repository](https://github.com/EngreitzLab/CRISPRDesigner/tree/master) and, if needed, download the appropriate genome bit indices for gRNA off-target scoring:
 
 	git clone git@github.com:EngreitzLab/CRISPRDesigner.git
 	cd CRISPRDesigner/

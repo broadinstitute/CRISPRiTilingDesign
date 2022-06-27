@@ -4,6 +4,7 @@ Scripts for designing CRISPR tiling screens, including CRISPRi and prime editing
 ## Authors
 
 * Jesse Engreitz (@engreitz)
+* Please cite: [Fulco\*, Nasser\* et al. Nature Genetics 2019](https://www.nature.com/articles/s41588-019-0538-0)
 
 ## Description
 
@@ -53,7 +54,7 @@ The first step is to generate a BED file containing the regions in which we want
 
 Do this according to the needs of your experiment. The end result should be BED4 file with `chr	start	end	name`.
 
-For CRISPRi-FlowFISH experiments, you can use the provided Snakemake workflow to select DNase peaks from specific cell types around specified genes:
+For CRISPRi-FlowFISH experiments, you can use the provided Snakemake workflow to select DNase peaks from specific cell types around specified genes (this excerpt points to files on Engreitz Lab cluster; for others, the relevant files are included in the `data/` and `example/` directories of this repository:
 
 	PROMOTERS=$GROUP_HOME/Software/ABC-Enhancer-Gene-Prediction/reference/RefSeqCurated.170308.bed.CollapsedGeneBounds.TSS500bp.bed
 	ABCLIST=/oak/stanford/groups/engreitz/Projects/ABC/191216_ABC/config/210221.ABCCellTypeTable.ABCPaperV3.LocusPlots.txt

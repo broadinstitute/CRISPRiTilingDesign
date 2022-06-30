@@ -162,7 +162,7 @@ Documentation:
 
 ### Step 4: Combine multiple guide pools, add PCR handles, and output files to order oligo pools
 
-First, set up a config file (see `example/CombinePoolsConfig.txt`) that lists paths to all of the guide subpools to process (and if desired, combine).
+First, set up a config file (see `example/CombinePoolsConfig.txt`) that lists paths to all of the guide subpools to process (and if desired, combine). See documentation for `CombineGuidePools.py` below for an explanation of the columns to include.
 
 Then, run:
 

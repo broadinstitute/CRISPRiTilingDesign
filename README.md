@@ -46,7 +46,7 @@ Engreitz Lab members working on Sherlock can skip this step.
 
 ## Usage (CRISPRi)
 
-A full example workflow for designing CRISPRi guides tiling across all DNase peaks around GATA1 is provided in `example/log.CRISPRiTilingGATA1.sh`, the full output of which can be found on the [shared Google Drive](https://drive.google.com/drive/u/1/folders/1F5-v0KopsE7hshjwMbHEryXd2wkDdR2Q) (or on Stanford OAK at `/oak/stanford/groups/engreitz/Projects/CRISPRDesign/210615_CollatedFilteredGuides` for Engreitz Lab members).
+A full example workflow for designing CRISPRi guides tiling across all DNase peaks around GATA1 is provided in `example/log.CRISPRiTilingGATA1.sh`, the full output of which can be found on the [shared Google Drive](https://drive.google.com/drive/u/1/folders/1F5-v0KopsE7hshjwMbHEryXd2wkDdR2Q) (or on Stanford OAK at `/oak/stanford/groups/engreitz/Projects/CRISPRDesign/210614_GATA1LocusCRISPRi` for Engreitz Lab members).
 
 ### Step 1: Select regions in which to design gRNAs
 

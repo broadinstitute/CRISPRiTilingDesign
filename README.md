@@ -152,7 +152,7 @@ Documentation:
 	  --selectMethod {score,even}
 	                        Method to select guides within elements. 'even' selects every Nth gRNA evenly across the region [recommended]. 'score' selects by best off-target score [not recommended]. (default: score)
 	  --forceGuides FORCEGUIDES
-	                        Pass a file containing one guide name per line to force selection of these gRNAs (useful for including gRNAs that we know work) (default: None)
+	                        Pass a file containing one guide name per line to force selection of these gRNAs (useful for including gRNAs that we know work). NOTE: The behavior of this option is not ideal- it matches by 'guide name', and those guides must be in the set of designed gRNAs in the previous step of the pipeline, e.g. because their regions are included in the design step. (default: None)
 	  --trimElements TRIMELEMENTS
 	                        Remove guides corresponding to elements that have fewer than this many guides (e.g., because not enough guides existed to choose from, repeats, etc.). (default: 0)
 	  --excludeRestrictionSites EXCLUDERESTRICTIONSITES
